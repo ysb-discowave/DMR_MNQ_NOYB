@@ -1,0 +1,3470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>RBMK-1000 反应堆模拟器</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
+<style>
+/* ============ 全局样式 - 苏联工业控制室风格 ============ */
+:root {
+  --panel-bg: #1a1a1a;
+  --panel-border: #2a2a2a;
+  --panel-bevel: #3a3a3a;
+  --reactor-grey: #2b2b2b;
+  --text-amber: #ffb000;
+  --text-red: #ff3030;
+  --text-green: #30ff60;
+  --text-blue: #30a0ff;
+  --text-cyan: #00f0ff;
+  --text-white: #e0e0e0;
+  --led-off: #3a1515;
+  --led-red: #ff2020;
+  --led-amber: #ff9000;
+  --led-green: #00ff40;
+  --gauge-bg: #0a0a0a;
+  --rod-active: #ff6b00;
+  --rod-selected: #ff3030;
+  --rod-inserted: #3030ff;
+  --rod-partial: #b0b000;
+  --rod-withdrawn: #606060;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Share Tech Mono', monospace;
+  background:
+    radial-gradient(ellipse at top, #1a1408 0%, #0a0805 40%, #000 100%);
+  color: var(--text-amber);
+  min-height: 100vh;
+  overflow-x: hidden;
+  user-select: none;
+}
+
+/* 背景扫描线纹理 */
+body::before {
+  content: '';
+  position: fixed; top:0; left:0; right:0; bottom:0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 2px,
+    rgba(255,176,0,0.015) 3px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ============ 顶部标题栏 ============ */
+.header-bar {
+  background: linear-gradient(180deg, #2a1a00 0%, #150d00 100%);
+  border-bottom: 3px solid var(--text-amber);
+  padding: 10px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 20px rgba(255,176,0,0.2), inset 0 -3px 10px rgba(0,0,0,0.6);
+  position: sticky; top: 0; z-index: 100;
+}
+.title-group { display: flex; align-items: center; gap: 15px; }
+.crest {
+  width: 44px; height: 44px;
+  border: 3px solid var(--text-amber);
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffb000 0%, #804000 60%, #2a1500 100%);
+  display: grid; place-items: center;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900; color: #1a0d00; font-size: 18px;
+  box-shadow: 0 0 15px rgba(255,176,0,0.6);
+}
+.crest span { transform: rotate(-5deg); }
+.header-title {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: 3px;
+  color: var(--text-amber);
+  text-shadow: 0 0 10px rgba(255,176,0,0.6), 2px 2px 0 #000;
+}
+.header-sub {
+  font-size: 11px;
+  color: #c09060;
+  letter-spacing: 4px;
+  margin-top: 2px;
+}
+.status-panel {
+  display: flex; gap: 10px; align-items: center;
+}
+.status-pill {
+  padding: 6px 12px;
+  border: 1px solid var(--text-amber);
+  border-radius: 3px;
+  background: #000;
+  font-size: 12px;
+  display: flex; align-items: center; gap: 6px;
+}
+.status-led {
+  width: 10px; height: 10px; border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
+}
+.led-green { background: var(--led-green); color: var(--led-green); animation: blink 1.5s infinite; }
+.led-amber { background: var(--led-amber); color: var(--led-amber); }
+.led-red   { background: var(--led-red); color: var(--led-red); animation: blink-fast 0.6s infinite; }
+@keyframes blink { 50% { opacity: 0.4; } }
+@keyframes blink-fast { 50% { opacity: 0.2; } }
+
+.power-indicator {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 18px; font-weight: 700;
+  color: var(--text-green);
+  background: #000;
+  padding: 8px 16px;
+  border: 2px solid #00ff40;
+  border-radius: 4px;
+  box-shadow: inset 0 0 10px rgba(0,255,64,0.3), 0 0 10px rgba(0,255,64,0.2);
+  text-shadow: 0 0 8px rgba(0,255,64,0.8);
+  min-width: 150px; text-align: center;
+  letter-spacing: 1px;
+}
+.power-indicator .label { font-size: 9px; color: #60a070; letter-spacing: 2px; display: block; }
+
+/* ============ 控制面板布局 ============ */
+.main-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr 340px;
+  grid-template-rows: auto auto auto;
+  gap: 12px;
+  padding: 12px;
+  max-width: 2000px;
+  margin: 0 auto;
+}
+
+/* 通用面板样式 */
+.ctrl-panel {
+  background:
+    linear-gradient(180deg, #1f1f1f 0%, #141414 100%);
+  border: 2px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 12px;
+  box-shadow:
+    inset 0 1px 0 var(--panel-bevel),
+    inset 0 -1px 0 #000,
+    0 4px 16px rgba(0,0,0,0.6);
+  position: relative;
+}
+.ctrl-panel::before {
+  content: '';
+  position: absolute; top: 6px; left: 6px; right: 6px; bottom: 6px;
+  border: 1px solid rgba(255,176,0,0.08);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.panel-title {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: var(--text-amber);
+  padding: 4px 0 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(255,176,0,0.3);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.panel-title .tag {
+  font-size: 9px; color: #606060; letter-spacing: 1px;
+  background: #000; padding: 2px 6px; border: 1px solid #333;
+}
+
+/* ============ 1. 左列：控制棒控制系统 ============ */
+.rod-panel { grid-column: 1; grid-row: 1 / span 2; }
+.rod-control-top {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.rods-group-btn {
+  padding: 8px 6px;
+  background: linear-gradient(180deg, #2a2000, #1a1400);
+  border: 1px solid var(--text-amber);
+  color: var(--text-amber);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 3px;
+  letter-spacing: 1px;
+  transition: all 0.15s;
+}
+.rods-group-btn:hover { background: linear-gradient(180deg,#3a2d00,#251c00); box-shadow: 0 0 10px rgba(255,176,0,0.3); }
+.rods-group-btn:active { transform: translateY(1px); }
+.rods-group-btn.danger {
+  border-color: var(--text-red);
+  color: var(--text-red);
+  background: linear-gradient(180deg, #2a0000, #1a0000);
+  font-weight: bold;
+  grid-column: span 2;
+  padding: 12px;
+  font-size: 14px;
+  letter-spacing: 4px;
+}
+.rods-group-btn.danger:hover { box-shadow: 0 0 20px rgba(255,40,40,0.5); }
+
+.rods-auto-mode {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px; background: #000; border: 1px solid #333; border-radius: 3px;
+  margin-bottom: 10px;
+  font-size: 11px;
+}
+.rods-auto-mode label { color: #909090; }
+.rods-auto-mode select, .rods-auto-mode input {
+  background: #000; color: var(--text-green); border: 1px solid #306030;
+  padding: 3px 6px; font-family: inherit; font-size: 11px; border-radius: 2px;
+}
+
+/* 单根控制棒网格 */
+.rod-grid-label {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: #907050; margin-bottom: 6px;
+}
+.rod-grid {
+  display: grid;
+  grid-template-columns: repeat(11, 1fr);
+  gap: 3px;
+  padding: 8px;
+  background: #080808;
+  border: 1px solid #333;
+  border-radius: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.rod-grid::-webkit-scrollbar { width: 6px; }
+.rod-grid::-webkit-scrollbar-track { background: #111; }
+.rod-grid::-webkit-scrollbar-thumb { background: var(--text-amber); border-radius: 3px; }
+.rod-cell {
+  aspect-ratio: 1;
+  background: var(--rod-withdrawn);
+  border: 1px solid #444;
+  border-radius: 2px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.1s;
+  display: grid; place-items: center;
+  font-size: 8px;
+  color: #000;
+  font-weight: bold;
+  /* 底色显示棒类型(图中图例色), 叠加"插入程度"(position)的height棒位高度条 */
+}
+.rod-cell::after {
+  content: '';
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: var(--rod-h, 0%);
+  background: linear-gradient(180deg, rgba(255,180,0,0.25), rgba(255,120,0,0.9));
+  transition: height 0.3s ease;
+  pointer-events: none;
+  mix-blend-mode: normal;
+  box-shadow: inset 0 1px 0 rgba(255,220,120,0.4);
+}
+.rod-cell.selected {
+  border-color: #fff;
+  box-shadow: 0 0 8px #fff, inset 0 0 4px rgba(255,255,255,0.5);
+  z-index: 2;
+}
+/* 控制棒网格按类型着色（匹配真实RBMK通道图例） */
+.rod-cell.type-M { background: #3070ff; color: #fff; border-color: #1a40a0; } /* 蓝手动 */
+.rod-cell.type-Z { background: #ffffff; color: #111; border-color: #999; }    /* 白AZ停堆 */
+.rod-cell.type-G { background: #30e060; color: #051500; border-color: #1a8040; } /* 绿平均功率自动 */
+.rod-cell.type-L { background: #40e0e0; color: #001b1b; border-color: #1690a0; } /* 青LAC/LEP */
+.rod-cell.type-Y { background: #f5e040; color: #201500; border-color: #b08020; } /* 黄轴向短棒 */
+
+.rod-cell.jammed {
+  background: repeating-linear-gradient(45deg, #300 0, #300 4px, #600 4px, #600 8px) !important;
+  border-color: #ff0000 !important;
+  color: #fff !important;
+  animation: jamBlink 0.7s infinite;
+  position: relative;
+}
+.rod-cell.jammed::before {
+  content: '✕';
+  position: absolute; inset: 0;
+  display:flex;align-items:center;justify-content:center;
+  color: #fff; font-weight: 900;
+  text-shadow: 0 0 6px #f00, 0 0 2px #f00;
+  z-index: 3;
+  font-size: 14px;
+}
+@keyframes jamBlink {
+  0%,100% { box-shadow: 0 0 4px #f00; }
+  50% { box-shadow: 0 0 14px #f00, inset 0 0 10px rgba(255,0,0,0.3); }
+}
+
+/* 选中棒详情 */
+.rod-detail {
+  margin-top: 10px;
+  padding: 10px;
+  background: #000;
+  border: 1px solid rgba(255,176,0,0.3);
+  border-radius: 4px;
+}
+.rod-detail-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px; color: var(--text-cyan);
+  margin-bottom: 8px; letter-spacing: 2px;
+}
+.rod-position-bar {
+  width: 100%; height: 18px;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 2px;
+  position: relative;
+  overflow: hidden;
+  margin: 6px 0 10px;
+}
+.rod-position-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #30ff60, #ff9000, #ff3030);
+  transition: width 0.2s;
+}
+.rod-position-label {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: #909090;
+}
+.rod-manual-btns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 6px;
+}
+.rod-manual-btns button {
+  padding: 6px 3px;
+  background: #151515;
+  border: 1px solid #444;
+  color: var(--text-amber);
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.rod-manual-btns button:hover { border-color: var(--text-amber); }
+.rod-manual-btns button.primary {
+  background: #2a2000; border-color: var(--text-amber);
+}
+.rod-manual-btns button.danger {
+  color: var(--text-red); border-color: #803030;
+}
+
+/* ============ 2. 中列：CPS核测仪表 + 棒位立式仪表 ============ */
+.reactor-view-panel { grid-column: 2; grid-row: 1; }
+.reactor-view { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* 组棒位立式仪表 */
+.rg { text-align:center; }
+.rg-bar {
+  position: relative;
+  width: 30px; height: 150px;
+  margin: 0 auto;
+  background: #000;
+  border: 2px solid #333;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: inset 0 0 8px rgba(0,0,0,0.8);
+}
+.rg-bar::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(180deg, transparent 0, transparent 14px, rgba(255,255,255,0.1) 14px, rgba(255,255,255,0.1) 15px);
+  pointer-events: none;
+}
+.rg-fill {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  transition: height 0.3s;
+}
+.rg-A  { background: linear-gradient(180deg, #041030, #3070ff); box-shadow: 0 0 10px #3070ff; } /* 手动蓝 */
+.rg-B  { background: linear-gradient(180deg, #2a0000, #ff3030); box-shadow: 0 0 10px #ff0000; } /* AZ（红警示条） */
+.rg-C  { background: linear-gradient(180deg, #002a10, #30e060); box-shadow: 0 0 10px #30e060; } /* 平均自动绿 */
+.rg-AZ { background: linear-gradient(180deg, #002230, #40e0e0); box-shadow: 0 0 10px #40e0e0; } /* LAC青 */
+.rg-L  { background: linear-gradient(180deg, #2a2200, #f5e040); box-shadow: 0 0 10px #c0a020; } /* 短黄 */
+.rg-Y  { background: linear-gradient(180deg, #2a2200, #f5e040); box-shadow: 0 0 10px #c0a020; } /* 短黄(别名) */
+.rg-cur {
+  position: absolute; left: -4px; right: -4px;
+  height: 3px; background: #fff;
+  box-shadow: 0 0 4px #fff;
+  transition: bottom 0.3s;
+  bottom: 0;
+}
+.rg-val {
+  font-family: 'VT323', monospace;
+  font-size: 16px;
+  color: var(--text-green);
+  text-shadow: 0 0 4px currentColor;
+  text-align: center;
+  margin-top: 3px;
+}
+
+/* 迷你堆芯缩略 - 真实 47x47 大圆盘缩略 */
+.mini-core {
+  width: 90px; height: 90px;
+  margin: 0 auto;
+  padding: 2px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #3a2000 0%, #1a0f00 55%, #050300 100%);
+  border: 2px solid #402810;
+  display: grid;
+  grid-template-columns: repeat(47, 1fr);
+  grid-template-rows: repeat(47, 1fr);
+  gap: 0;
+  box-shadow: inset 0 0 20px rgba(255,140,0,0.18), 0 0 15px rgba(0,0,0,0.7);
+}
+.mini-cell {
+  background: transparent;
+  border-radius: 0;
+  transition: background-color 0.25s;
+  position: relative;
+}
+.mini-cell.a { background: #ffb000; box-shadow: 0 0 1px rgba(255,140,0,0.6); }
+.mini-cell.h { background: radial-gradient(circle, #fff080, #ff8040 60%, #c03000); box-shadow: 0 0 2px #ff6000; }
+.mini-cell.x { background: #ff0000; box-shadow: 0 0 3px #ff0000; animation: overheat 0.3s infinite; }
+.mini-cell.m { background: #2a0000; }
+
+/* 反应性分解条形图 */
+.rho-decomp-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 60px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+}
+.rho-lbl { font-size: 10px; }
+.rho-bar-bg {
+  position: relative;
+  height: 14px;
+  background: #000;
+  border: 1px solid #333;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.rho-bar-bg::before {
+  content: '';
+  position: absolute;
+  left: 50%; top: 0; bottom: 0; width: 1px;
+  background: #808080;
+  z-index: 1;
+}
+.rho-bar-fill {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: 50%;
+  transition: width 0.3s, transform 0.3s;
+  transform-origin: left center;
+}
+.rho-num {
+  font-family: 'VT323', monospace;
+  font-size: 15px;
+  color: #e0e0e0;
+  text-align: right;
+}
+
+.core-vessel {
+  background:
+    radial-gradient(circle at 50% 40%, #3a2000 0%, #1a0f00 50%, #050300 100%);
+  border: 3px solid #402810;
+  border-radius: 50%;
+  aspect-ratio: 1;
+  max-width: 360px;
+  margin: 0 auto;
+  position: relative;
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 60px rgba(255,100,0,0.15),
+    0 0 30px rgba(0,0,0,0.9),
+    0 0 0 6px #1a1a1a,
+    0 0 0 8px #333;
+}
+.core-inner {
+  position: absolute; inset: 12%;
+  background: radial-gradient(circle, rgba(255,140,0,0.08) 0%, transparent 70%);
+  border-radius: 50%;
+  border: 2px solid #4a3010;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(7, 1fr);
+  padding: 4%;
+  animation: core-glow 3s ease-in-out infinite;
+}
+@keyframes core-glow {
+  0%, 100% { box-shadow: inset 0 0 20px rgba(255,140,0,0.05); }
+  50% { box-shadow: inset 0 0 40px rgba(255,140,0,0.15); }
+}
+.core-fuel-cell {
+  background: rgba(40,20,5,0.7);
+  border: 1px solid rgba(80,50,20,0.6);
+  border-radius: 50%;
+  margin: 8%;
+  transition: all 0.3s;
+  position: relative;
+}
+.core-fuel-cell.active {
+  background: radial-gradient(circle, rgba(255,176,0,0.9), rgba(255,80,0,0.7));
+  box-shadow: 0 0 8px rgba(255,140,0,0.8);
+}
+.core-fuel-cell.hot {
+  background: radial-gradient(circle, #ffff80, #ff8040, #c03000);
+  box-shadow: 0 0 14px #ff6000;
+  animation: pulse-hot 0.4s infinite;
+}
+@keyframes pulse-hot { 50% { transform: scale(1.1); } }
+.core-fuel-cell.overheat {
+  background: radial-gradient(circle, #fff, #ff0, #f00);
+  animation: overheat 0.2s infinite;
+}
+@keyframes overheat {
+  0%, 100% { box-shadow: 0 0 10px #ff0000; }
+  50% { box-shadow: 0 0 30px #ff8000, 0 0 60px #ff0000; }
+}
+.core-fuel-cell.melted {
+  background: #2a0000;
+  border-color: #800;
+}
+.core-center-label {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px; color: var(--text-cyan);
+  text-shadow: 0 0 4px #000;
+  pointer-events: none;
+  z-index: 3;
+  background: rgba(0,0,0,0.7);
+  padding: 2px 8px; border-radius: 3px;
+}
+
+/* 核心参数表 */
+.core-readouts {
+  display: flex; flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+}
+.readout-row {
+  background: #0a0a0a;
+  border: 1px solid #222;
+  border-radius: 3px;
+  padding: 6px 10px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.readout-row .r-label {
+  font-size: 10px; color: #a08060; letter-spacing: 1px;
+}
+.readout-row .r-value {
+  font-family: 'VT323', monospace;
+  font-size: 22px;
+  letter-spacing: 2px;
+  color: var(--text-green);
+  text-shadow: 0 0 6px currentColor;
+  min-width: 100px; text-align: right;
+}
+.readout-row.warn .r-value { color: var(--led-amber); animation: blink 1s infinite; }
+.readout-row.crit .r-value { color: var(--led-red); animation: blink-fast 0.5s infinite; }
+.readout-row .r-unit {
+  font-size: 10px; color: #606060; margin-left: 4px;
+}
+
+/* 二回路概览（流程图） */
+.flow-panel { grid-column: 2; grid-row: 2; }
+.flow-diagram {
+  position: relative;
+  background: linear-gradient(180deg, #0a1008 0%, #050804 100%);
+  border: 1px solid #1a2a1a;
+  border-radius: 4px;
+  padding: 15px 10px;
+  min-height: 220px;
+}
+.flow-svg {
+  width: 100%;
+  height: 200px;
+  display: block;
+}
+
+/* ============ 3. 右列：动力与二回路系统 ============ */
+.turbine-panel { grid-column: 3; grid-row: 1 / span 2; }
+
+/* 泵组显示 */
+.pump-row {
+  display: grid;
+  grid-template-columns: 40px 1fr 60px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #0a0a0a;
+  border: 1px solid #222;
+  border-radius: 3px;
+  margin-bottom: 6px;
+}
+.pump-icon {
+  width: 34px; height: 34px;
+  background: radial-gradient(circle, #303030 0%, #151515 100%);
+  border: 2px solid #444;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  position: relative;
+  overflow: hidden;
+}
+.pump-icon::after {
+  content: '⟲';
+  font-size: 18px;
+  color: #555;
+  transition: all 0.3s;
+}
+.pump-row.running .pump-icon {
+  border-color: var(--led-green);
+  background: radial-gradient(circle, #003010 0%, #001500 100%);
+  box-shadow: 0 0 8px rgba(0,255,64,0.3);
+}
+.pump-row.running .pump-icon::after {
+  color: var(--led-green);
+  animation: spin 1s linear infinite;
+  text-shadow: 0 0 6px var(--led-green);
+}
+.pump-row.trip .pump-icon {
+  border-color: var(--led-red);
+  background: radial-gradient(circle, #300000 0%, #150000 100%);
+  animation: shake 0.5s;
+}
+.pump-row.trip .pump-icon::after { color: var(--led-red); }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes shake {
+  0%,100% { transform: translate(0); }
+  25% { transform: translate(-2px, 1px); }
+  75% { transform: translate(2px, -1px); }
+}
+.pump-name {
+  font-size: 11px;
+  color: #c0a080;
+}
+.pump-name small { display: block; color: #606060; font-size: 9px; }
+.pump-speed {
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  color: var(--text-cyan);
+  text-align: right;
+  text-shadow: 0 0 4px currentColor;
+}
+.pump-row.running .pump-speed { color: var(--text-green); }
+.pump-row.trip .pump-speed { color: var(--text-red); }
+
+.pump-controls {
+  display: flex; gap: 4px; margin-top: 3px;
+}
+.pump-btn {
+  padding: 2px 6px;
+  background: #151515;
+  border: 1px solid #333;
+  color: #808080;
+  font-family: inherit;
+  font-size: 9px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.pump-btn.on { border-color: #008040; color: var(--led-green); }
+.pump-btn.on:hover { background: #003010; }
+.pump-btn.off { border-color: #803030; color: #ff8080; }
+.pump-btn.off:hover { background: #300000; }
+.pump-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.section-label {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #8090a0;
+  padding: 6px 4px 4px;
+  margin: 6px 0 4px;
+  border-top: 1px dashed #2a2a2a;
+}
+
+/* 除氧器 */
+.deaerator-box {
+  background: linear-gradient(180deg, #0f1a1a, #070d0d);
+  border: 1px solid #1a3a3a;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.dear-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px;
+}
+.dear-name { font-family: 'Orbitron', sans-serif; font-size: 11px; color: var(--text-cyan); }
+.dear-level {
+  position: relative;
+  height: 40px;
+  background: #000;
+  border: 1px solid #333;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.dear-level-fill {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(180deg, #3080c0, #004080);
+  box-shadow: 0 0 10px rgba(48,128,192,0.5) inset;
+  transition: height 0.4s;
+}
+.dear-level-fill::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: rgba(255,255,255,0.4);
+}
+.dear-level-ticks {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column; justify-content: space-between;
+  padding: 2px 4px;
+  font-size: 8px; color: #606060;
+  pointer-events: none;
+}
+.dear-params {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px;
+  font-size: 10px;
+}
+.dear-params span { color: #808080; }
+.dear-params b { color: var(--text-green); float: right; font-weight: normal; font-family: 'VT323', monospace; font-size: 15px; }
+
+/* 汽轮机 */
+.turbine-box {
+  background: linear-gradient(180deg, #1a1508, #0d0a04);
+  border: 1px solid #3a3018;
+  border-radius: 4px;
+  padding: 12px;
+}
+.turbine-viz {
+  position: relative;
+  height: 60px;
+  display: flex; align-items: center; justify-content: center;
+  gap: 0;
+  margin: 6px 0;
+}
+.turbine-stage {
+  width: 40px; height: 40px;
+  border: 2px solid #5a4020;
+  border-radius: 50%;
+  background: radial-gradient(circle, #2a1a08, #1a0f04);
+  display: grid; place-items: center;
+  transition: all 0.3s;
+}
+.turbine-stage.running {
+  border-color: var(--text-amber);
+  background: radial-gradient(circle, #3a2808, #1a0f04);
+  box-shadow: 0 0 12px rgba(255,176,0,0.3);
+}
+.turbine-stage.running::after {
+  content: '✦'; color: var(--text-amber);
+  animation: spin 0.5s linear infinite;
+}
+.turbine-shaft {
+  width: 20px; height: 4px;
+  background: linear-gradient(90deg, #5a4020, #3a2810, #5a4020);
+  border-radius: 2px;
+}
+.turbine-stats {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  font-size: 11px;
+  margin-top: 8px;
+}
+.tstat {
+  background: #000;
+  padding: 5px 8px;
+  border: 1px solid #222;
+  border-radius: 2px;
+}
+.tstat label { display: block; color: #807050; font-size: 9px; letter-spacing: 1px; }
+.tstat b {
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  color: var(--text-green);
+  text-shadow: 0 0 4px currentColor;
+}
+.tstat.warn b { color: var(--text-amber); }
+.tstat.crit b { color: var(--text-red); animation: blink-fast 0.5s infinite; }
+
+.turbine-controls {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  margin-top: 10px;
+}
+.turbine-controls button {
+  padding: 8px 6px;
+  background: linear-gradient(180deg, #1a1508, #0d0a04);
+  border: 1px solid #5a4020;
+  color: var(--text-amber);
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  border-radius: 3px;
+  letter-spacing: 1px;
+}
+.turbine-controls button:hover { background: linear-gradient(180deg, #2a2008, #1a1204); }
+.turbine-controls button.crit { border-color: #803030; color: #ff8080; }
+.turbine-controls button.crit:hover { background: #300000; }
+.turbine-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* 发电机负荷滑块 */
+.gen-load-slider {
+  padding: 10px;
+  background: #000;
+  border: 1px solid #222;
+  border-radius: 3px;
+  margin-top: 8px;
+}
+.gen-load-slider label {
+  display: flex; justify-content: space-between;
+  font-size: 10px; color: #a08060; margin-bottom: 4px;
+}
+input[type=range].slider {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 8px;
+  background: linear-gradient(90deg, #003010, #ffb000, #801010);
+  border-radius: 4px; outline: none;
+  border: 1px solid #333;
+}
+input[type=range].slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 18px; height: 18px;
+  background: radial-gradient(circle, #ffb000, #5a3000);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 6px #ffb000;
+}
+
+/* ============ 底栏：警报与运行日志 ============ */
+.alarm-bar {
+  grid-column: 1 / span 3;
+  background: #000;
+  border: 2px solid var(--text-red);
+  border-radius: 4px;
+  padding: 8px 12px;
+  min-height: 60px;
+  max-height: 120px;
+  overflow-y: auto;
+  box-shadow: inset 0 0 20px rgba(255,0,0,0.1);
+}
+.alarm-bar-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 10px; color: var(--text-red);
+  letter-spacing: 2px;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px dashed #500000;
+  display: flex; justify-content: space-between;
+}
+.alarm-log { font-size: 11px; line-height: 1.6; }
+.alarm-entry {
+  display: grid;
+  grid-template-columns: 70px 60px 1fr;
+  gap: 8px;
+  padding: 2px 0;
+  border-bottom: 1px dashed #1a1a1a;
+}
+.alarm-entry .time { color: #606060; font-family: 'VT323', monospace; }
+.alarm-entry .lvl-INFO { color: var(--text-cyan); }
+.alarm-entry .lvl-WARN { color: var(--led-amber); }
+.alarm-entry .lvl-ALRM { color: var(--led-red); font-weight: bold; }
+.alarm-entry .lvl-SCRM { color: #fff; background: #800000; padding: 0 4px; border-radius: 2px; }
+
+/* ============ 全局警报横幅 ============ */
+.scram-banner {
+  position: fixed; top: 0; left: 0; right: 0;
+  background: linear-gradient(180deg, #800000, #300000);
+  border-bottom: 3px solid #ff0000;
+  padding: 12px;
+  text-align: center;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 20px;
+  letter-spacing: 8px;
+  color: #fff;
+  text-shadow: 0 0 10px #ff0, 0 0 20px #f00;
+  z-index: 1000;
+  animation: banner-blink 0.6s infinite;
+  transform: translateY(-100%);
+  transition: transform 0.3s;
+}
+.scram-banner.active { transform: translateY(0); }
+@keyframes banner-blink {
+  0%, 100% { background: linear-gradient(180deg, #800000, #300000); }
+  50% { background: linear-gradient(180deg, #ff0000, #800000); }
+}
+
+/* ============ 仿真速度控制 ============ */
+.sim-controls {
+  grid-column: 1 / span 3;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px;
+  background: linear-gradient(180deg, #0a0a0a, #050505);
+  border: 1px solid #222;
+  border-radius: 4px;
+}
+.sim-controls button {
+  padding: 8px 16px;
+  background: #151515;
+  border: 1px solid #333;
+  color: #a0a0a0;
+  font-family: 'Orbitron', sans-serif;
+  font-size: 11px;
+  letter-spacing: 2px;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.sim-controls button.active {
+  background: #2a2000;
+  border-color: var(--text-amber);
+  color: var(--text-amber);
+  box-shadow: 0 0 10px rgba(255,176,0,0.3);
+}
+.sim-controls button.danger {
+  background: #300000;
+  border-color: #803030;
+  color: #ff6060;
+}
+.sim-controls .spacer { width: 30px; }
+
+/* 小工具提示 */
+.rod-cell:hover::before {
+  content: attr(data-tip);
+  position: absolute; bottom: 120%; left: 50%;
+  transform: translateX(-50%);
+  background: #000; color: #fff;
+  font-size: 9px; padding: 2px 6px;
+  border: 1px solid var(--text-amber);
+  border-radius: 2px;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* 响应式 */
+@media (max-width: 1400px) {
+  .main-grid { grid-template-columns: 280px 1fr 300px; }
+}
+@media (max-width: 1100px) {
+  .main-grid { grid-template-columns: 1fr; }
+  .rod-panel, .turbine-panel { grid-row: auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- 全局SCRAM横幅 -->
+<div class="scram-banner" id="scramBanner">⚠ SCRAM 紧急停堆 ⚠ 反应堆已停闭 ⚠</div>
+
+<!-- 顶部标题栏 -->
+<div class="header-bar">
+  <div class="title-group">
+    <div class="crest"><span>RBMK</span></div>
+    <div>
+      <div class="header-title">РБМК-1000 反应堆控制模拟器</div>
+      <div class="header-sub">HIGH POWER CHANNEL-TYPE REACTOR · UNIT №4 · SIMULATOR v2.6</div>
+    </div>
+  </div>
+  <div class="status-panel">
+    <div class="status-pill"><span class="status-led led-green"></span> 系统在线</div>
+    <div class="status-pill"><span class="status-led led-amber"></span> <span id="modeLabel">手动控制</span></div>
+    <div class="power-indicator">
+      <span class="label">THERMAL POWER</span>
+      <span id="powerReadout">0.0</span> <span style="font-size:11px;color:#60a070">MW</span>
+    </div>
+  </div>
+</div>
+
+<!-- 仿真控制 -->
+<div style="max-width:2000px;margin:0 auto;padding:12px 12px 0;">
+  <div class="sim-controls">
+    <button id="btnPause" onclick="setSimSpeed(0)">⏸ 暂停</button>
+    <button id="btn1x" class="active" onclick="setSimSpeed(1)">▶ 1× 实时</button>
+    <button id="btn5x" onclick="setSimSpeed(5)">▶▶ 5×</button>
+    <button id="btn20x" onclick="setSimSpeed(20)">▶▶▶ 20×</button>
+    <span class="spacer"></span>
+    <button onclick="resetSim()">⟲ 复位到冷停堆</button>
+    <button onclick="injectRodJamming()">⚙ 随机卡棒</button>
+    <button class="danger" onclick="scramReactor('MANUAL SCRAM')">🛑 手动 AZ-5 停堆</button>
+  </div>
+</div>
+
+<!-- 主控制面板网格 -->
+<div class="main-grid">
+
+  <!-- ========== 左列：控制棒控制系统 ========== -->
+  <div class="ctrl-panel rod-panel">
+    <div class="panel-title">
+      <span>◉ 控制棒控制系统 CPS</span>
+      <span class="tag">211 RODS</span>
+    </div>
+
+    <!-- 控制棒操作指引 -->
+    <div class="rod-control-top">
+      <div style="grid-column:span 2;padding:6px 8px;background:#0a0a00;border:1px dashed #403010;border-radius:3px;font-size:11px;color:#a08050;line-height:1.6;">
+        <b style="color:var(--text-amber)">操作说明：</b><br>
+        · <b>单击</b>：单选控制棒<br>
+        · <b>Ctrl+单击</b>：多选 / 取消多选<br>
+        · <b>Shift+单击</b>：区间多选 (锚点到当前棒)<br>
+        · <b>拉杆</b>：选中后拖动下方滑条 <u>实时</u> 调节棒位<br>
+        · <b>卡棒</b>：选中后按"模拟卡死"；SCRAM也无法插入
+      </div>
+      <button class="rods-group-btn danger" onclick="scramReactor('AZ-5 TRIGGERED')">⚠ AZ-5 紧急停堆 ⚠</button>
+      <button class="rods-group-btn" onclick="clearRodSelection()">⎚ 清除选择</button>
+      <button class="rods-group-btn" onclick="clearAllJammed()">🔧 全部卡棒复位</button>
+      <button class="rods-group-btn" onclick="toggleAZrods('insert')">AZ组 ▼ 插入</button>
+      <button class="rods-group-btn" onclick="toggleAZrods('withdraw')">AZ组 ▲ 抽出</button>
+    </div>
+
+    <!-- 控制棒网格 -->
+    <div class="rod-grid-label">
+      <span>◼ 控制棒矩阵 <span id="rodGridLabel">（无选中，共0根）</span></span>
+      <span><span style="color:var(--rod-withdrawn)">■</span>抽出 <span style="color:var(--rod-active)">■</span>部分 <span style="color:var(--rod-inserted)">■</span>插入 <span style="color:#ff3030">■</span>卡死</span>
+    </div>
+    <div class="rod-grid" id="rodGrid"></div>
+
+    <!-- 选中棒拉杆控制 (单选+多选都共用此拉杆，批量自动联动) -->
+    <div class="rod-detail" id="rodDetail" style="display:block;">
+      <div class="rod-detail-title" id="rodDetailTitle">—</div>
+      <div class="rod-lever-area" style="margin-top:6px;">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#808080;margin-bottom:3px;">
+          <span>▲ 0% 完全抽出 (增加反应性)</span>
+          <span id="rodPosText" style="color:#fff">—</span>
+          <span>▼ 100% 完全插入 (吸收中子)</span>
+        </div>
+        <div class="rod-position-bar" style="height:22px;margin-bottom:4px;">
+          <div class="rod-position-fill" id="rodPosFill" style="width:0%"></div>
+        </div>
+        <input type="range" class="slider" id="rodLever" min="0" max="100" step="1" value="100"
+          style="width:100%;margin:4px 0 8px;" oninput="onRodLever(this.value)" onchange="onRodLever(this.value,true)">
+      </div>
+      <!-- 单棒/批量 快捷按钮 -->
+      <div class="rod-manual-btns">
+        <button onclick="setSelectedRodsPos(0)">全提 ▲ 0%</button>
+        <button onclick="setSelectedRodsPos(25)">25%</button>
+        <button class="primary" onclick="setSelectedRodsPos(50)">50%</button>
+        <button onclick="setSelectedRodsPos(75)">75%</button>
+        <button class="danger" onclick="setSelectedRodsPos(100)">全插 ▼ 100%</button>
+        <button onclick="moveSelectedRod(-1)">-1%</button>
+        <button onclick="moveSelectedRod(+1)">+1%</button>
+        <button onclick="moveSelectedRod(-5)">-5%</button>
+        <button onclick="moveSelectedRod(+5)">+5%</button>
+        <button class="danger" onclick="toggleJamSelected()">🔧 卡/解 当前棒</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 中列：CPS 控制棒 & 核测量仪表 ========== -->
+  <div class="ctrl-panel reactor-view-panel">
+    <div class="panel-title">
+      <span>◉ CPS 控制棒 + 核测仪表 REACTOR INSTRUMENTATION</span>
+      <span class="tag" id="coreStatusTag">SHUTDOWN</span>
+    </div>
+
+    <!-- 核测量仪表: 源量程 / 中间量程 / 功率量程 (三道水平指针) -->
+    <div class="cps-neutron-panel" style="padding:10px;background:linear-gradient(180deg,#0a0a0a,#050505);border:1px solid #222;border-radius:4px;margin-bottom:10px;">
+      <div style="font-family:Orbitron,sans-serif;font-size:11px;letter-spacing:2px;color:var(--text-cyan);padding:2px 0 8px;">◉ NEUTRON FLUX CHANNELS</div>
+      <!-- 源量程 Source range (计数率) -->
+      <div class="nmeter" style="margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#80a0c0;margin-bottom:2px;">
+          <span>① 源量程 SR (n/s 对数)</span><span><b id="srVal">1.0e2</b> cps</span>
+        </div>
+        <div style="position:relative;height:14px;background:#000;border:1px solid #1a3a5a;border-radius:3px;overflow:hidden;">
+          <div id="srBar" style="position:absolute;left:0;top:0;bottom:0;width:1%;background:linear-gradient(90deg,#3060ff,#80c0ff);box-shadow:0 0 4px #3060ff;"></div>
+          <div style="position:absolute;inset:0;display:flex;justify-content:space-around;font-size:8px;color:#305070;align-items:center;">
+            <span>10²</span><span>10⁴</span><span>10⁶</span><span>10⁸</span><span>10¹⁰</span>
+          </div>
+        </div>
+      </div>
+      <!-- 中间量程 Intermediate range (电流) -->
+      <div class="nmeter" style="margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#a080ff;margin-bottom:2px;">
+          <span>② 中间量程 IR (pA 对数)</span><span><b id="irVal" style="color:#a080ff;">1.0e-10</b> A</span>
+        </div>
+        <div style="position:relative;height:14px;background:#000;border:1px solid #2a1a5a;border-radius:3px;overflow:hidden;">
+          <div id="irBar" style="position:absolute;left:0;top:0;bottom:0;width:2%;background:linear-gradient(90deg,#8040ff,#c080ff);box-shadow:0 0 4px #8040ff;"></div>
+          <div style="position:absolute;inset:0;display:flex;justify-content:space-around;font-size:8px;color:#504080;align-items:center;">
+            <span>10⁻¹¹</span><span>10⁻⁹</span><span>10⁻⁷</span><span>10⁻⁵</span><span>10⁻³</span>
+          </div>
+        </div>
+      </div>
+      <!-- 功率量程 Power range (%FP) -->
+      <div class="nmeter">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:#40ff80;margin-bottom:2px;">
+          <span>③ 功率量程 PR (%FP)</span><span><b id="prVal" style="color:#40ff80;">0.00</b> % FP</span>
+        </div>
+        <div style="position:relative;height:16px;background:#000;border:1px solid #105028;border-radius:3px;overflow:hidden;">
+          <div id="prBar" style="position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,#004020,#00ff60);box-shadow:0 0 5px #00ff60;"></div>
+          <div style="position:absolute;top:-2px;left:25%;width:1px;height:20px;background:#ff9000;opacity:0.6;"></div>
+          <div style="position:absolute;top:-2px;left:50%;width:1px;height:20px;background:#ff3030;opacity:0.6;"></div>
+          <div style="position:absolute;top:-2px;left:100%;width:2px;height:20px;background:#ff0000;"></div>
+          <div style="position:absolute;inset:0;display:flex;justify-content:space-around;font-size:8px;color:#406050;align-items:center;">
+            <span>0</span><span>25% 预警</span><span>50%</span><span>75</span><span>100% FP</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:12px;">
+      <!-- 左: 5组控制棒棒位立式仪表 (手动/AZ/平均/LAC/短) + 小堆芯缩略 -->
+      <div>
+        <div style="font-family:Orbitron,sans-serif;font-size:11px;color:var(--text-amber);letter-spacing:2px;padding:0 4px 6px;">◉ CONTROL ROD GROUP POSITION · 5组类型</div>
+        <div style="display:grid;grid-template-columns:repeat(6, 1fr);gap:8px;padding:8px 4px 4px;">
+          <div class="rg" data-group="手动">
+            <div style="text-align:center;font-size:10px;color:#3080ff;margin-bottom:3px;">手动蓝</div>
+            <div class="rg-bar"><div class="rg-fill rg-A"></div><div class="rg-cur" id="rgACur"></div></div>
+            <div class="rg-val" id="rgAval">100%</div>
+          </div>
+          <div class="rg" data-group="AZ">
+            <div style="text-align:center;font-size:10px;color:#ff3030;margin-bottom:3px;">AZ停堆</div>
+            <div class="rg-bar"><div class="rg-fill rg-B"></div><div class="rg-cur" id="rgBCur"></div></div>
+            <div class="rg-val" id="rgBval">0%</div>
+          </div>
+          <div class="rg" data-group="平均">
+            <div style="text-align:center;font-size:10px;color:#30e060;margin-bottom:3px;">平均自动</div>
+            <div class="rg-bar"><div class="rg-fill rg-C"></div><div class="rg-cur" id="rgCCur"></div></div>
+            <div class="rg-val" id="rgCval">100%</div>
+          </div>
+          <div class="rg" data-group="LAC">
+            <div style="text-align:center;font-size:10px;color:#40e0e0;margin-bottom:3px;">LAC·LEP</div>
+            <div class="rg-bar"><div class="rg-fill rg-AZ"></div><div class="rg-cur" id="rgAZCur"></div></div>
+            <div class="rg-val" id="rgAZval">100%</div>
+          </div>
+          <div class="rg" data-group="短棒">
+            <div style="text-align:center;font-size:10px;color:#f5e040;margin-bottom:3px;">轴向短</div>
+            <div class="rg-bar"><div class="rg-fill rg-Y"></div><div class="rg-cur" id="rgYCur"></div></div>
+            <div class="rg-val" id="rgYval">100%</div>
+          </div>
+          <!-- 小堆芯缩略 -->
+          <div>
+            <div style="text-align:center;font-size:10px;color:var(--text-cyan);margin-bottom:3px;">CORE</div>
+            <div class="mini-core" id="miniCore">
+              <!-- JS动态渲染: 47x47真实圆盘缩略 -->
+            </div>
+            <div class="rg-val" id="miniCoreLabel" style="font-size:9px;">20°C</div>
+            <div id="miniCoreStat" style="font-family:VT323,monospace;font-size:11px;color:var(--text-amber);text-align:center;margin-top:1px;letter-spacing:0.3px;">DNB0/堵塞0</div>
+          </div>
+        </div>
+
+        <!-- 反应性条形分解图 -->
+        <div style="margin-top:8px;padding:8px;background:linear-gradient(180deg,#080808,#050505);border:1px solid #222;border-radius:3px;">
+          <div style="font-family:Orbitron,sans-serif;font-size:11px;color:var(--text-cyan);letter-spacing:2px;margin-bottom:6px;">
+            ◉ REACTIVITY BREAKDOWN (ρ / β)  ·  TOTAL: <b id="rhoTotal" style="color:#fff">+0.0000</b>
+          </div>
+          <div class="rho-decomp-row"><span class="rho-lbl" style="color:#ff6060">控制棒</span>
+            <div class="rho-bar-bg"><div class="rho-bar-fill" id="rhoRods" style="background:#ff6060;width:50%"></div></div><span class="rho-num" id="rhoRodsV">-0.070</span></div>
+          <div class="rho-decomp-row"><span class="rho-lbl" style="color:#ff9060">燃料多普勒</span>
+            <div class="rho-bar-bg"><div class="rho-bar-fill" id="rhoFuel" style="background:#ff9060;width:50%"></div></div><span class="rho-num" id="rhoFuelV">0.000</span></div>
+          <div class="rho-decomp-row"><span class="rho-lbl" style="color:#ff50a0">空泡反馈</span>
+            <div class="rho-bar-bg"><div class="rho-bar-fill" id="rhoVoid" style="background:#ff50a0;width:50%"></div></div><span class="rho-num" id="rhoVoidV">0.000</span></div>
+          <div class="rho-decomp-row"><span class="rho-lbl" style="color:#c040ff">慢化剂温度</span>
+            <div class="rho-bar-bg"><div class="rho-bar-fill" id="rhoCool" style="background:#c040ff;width:50%"></div></div><span class="rho-num" id="rhoCoolV">0.000</span></div>
+          <div class="rho-decomp-row"><span class="rho-lbl" style="color:#30a0ff">Xe135氙毒</span>
+            <div class="rho-bar-bg"><div class="rho-bar-fill" id="rhoXe" style="background:#30a0ff;width:50%"></div></div><span class="rho-num" id="rhoXeV">0.000</span></div>
+        </div>
+      </div>
+
+      <!-- 右: 8个核心参数读数 -->
+      <div class="core-readouts">
+        <div class="readout-row">
+          <span class="r-label">☢ 中子通量 PR</span>
+          <span><span class="r-value" id="neutronFlux">0.0</span><span class="r-unit">%FP</span></span>
+        </div>
+        <div class="readout-row">
+          <span class="r-label">∆k/k 有效反应性</span>
+          <span><span class="r-value" id="rhoValue">0.000</span><span class="r-unit">β</span></span>
+        </div>
+        <div class="readout-row">
+          <span class="r-label">反应堆周期 T</span>
+          <span><span class="r-value" id="periodVal">∞</span><span class="r-unit">s</span></span>
+        </div>
+        <div class="readout-row">
+          <span class="r-label">T冷段 / T热段</span>
+          <span><span class="r-value" id="legTemps">20/20</span><span class="r-unit">°C</span></span>
+        </div>
+        <div class="readout-row">
+          <span class="r-label">T_avg / T_max</span>
+          <span><span class="r-value" id="avgTemp">20/20</span><span class="r-unit">°C</span></span>
+        </div>
+        <div class="readout-row">
+          <span class="r-label">P_primary 一回路</span>
+          <span><span class="r-value" id="priPressure">0.0</span><span class="r-unit">MPa</span></span>
+        </div>
+        <div class="readout-row">
+          <span class="r-label">空泡份额 / α_void</span>
+          <span><span class="r-value" id="voidVal">0%</span><span class="r-unit" id="voidCoeff">β</span></span>
+        </div>
+        <div class="readout-row">
+          <span class="r-label">局域空泡峰值</span>
+          <span><span class="r-value" id="localVoidMax">0%</span><span class="r-unit" id="dnbStat">DNB 0</span></span>
+        </div>
+        <div class="readout-row">
+          <span class="r-label">DNB / 堵塞通道</span>
+          <span><span class="r-value" id="blockStat">0 / 0</span><span class="r-unit">根</span></span>
+        </div>
+        <div class="readout-row">
+          <span class="r-label">Xe-135 / Sm-149</span>
+          <span><span class="r-value" id="xePoison">0.0</span><span class="r-unit">β</span></span>
+        </div>
+        <div class="readout-row">
+          <span class="r-label">MCP 流量率</span>
+          <span><span class="r-value" id="flowVal">0</span><span class="r-unit">%</span></span>
+        </div>
+        <div class="readout-row">
+          <span class="r-label">功率提升率</span>
+          <span><span class="r-value" id="rampRate">+0.0</span><span class="r-unit">%/min</span></span>
+        </div>
+        <div class="readout-row">
+          <span class="r-label">蒸汽/热 卡棒</span>
+          <span><span class="r-value" id="jamReasonStat">0 / 0</span><span class="r-unit" id="jamCount">0选中</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 右列：二回路/汽轮机系统 ========== -->
+  <div class="ctrl-panel turbine-panel">
+    <div class="panel-title">
+      <span>◉ 主循环泵 MCP</span>
+      <span class="tag">LOOPS 1-4</span>
+    </div>
+    <!-- 主循环泵 (8台: 4环路x2) -->
+    <div id="mcpList"></div>
+
+    <div class="section-label">▸ 给水系统 FEEDWATER</div>
+    <!-- 给水泵 (4台) -->
+    <div id="fwpList"></div>
+
+    <div class="section-label">▸ 除氧器 DEAERATOR</div>
+    <div class="deaerator-box">
+      <div class="dear-header">
+        <span class="dear-name">除氧器 DA-1 / DA-2</span>
+        <span style="font-size:10px;color:#808080;" id="dearStatus">常压</span>
+      </div>
+      <div class="dear-level">
+        <div class="dear-level-fill" id="dearLevel" style="height:60%"></div>
+        <div class="dear-level-ticks">
+          <span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span>
+        </div>
+      </div>
+      <div class="dear-params">
+        <div><span>压力</span><b id="dearPress">0.12</b> <small style="color:#606060;">MPa</small></div>
+        <div><span>温度</span><b id="dearTemp">104</b> <small style="color:#606060;">°C</small></div>
+        <div><span>含氧量</span><b id="dearO2">5.0</b> <small style="color:#606060;">ppb</small></div>
+        <div><span>流量</span><b id="dearFlow">0</b> <small style="color:#606060;">t/h</small></div>
+      </div>
+      <div class="pump-controls" style="margin-top:8px;">
+        <button class="pump-btn on" onclick="toggleVent(true)">开排气</button>
+        <button class="pump-btn off" onclick="toggleVent(false)">关排气</button>
+        <button class="pump-btn on" onclick="toggleSteam(true)">投蒸汽</button>
+        <button class="pump-btn off" onclick="toggleSteam(false)">停蒸汽</button>
+      </div>
+    </div>
+
+    <div class="section-label">▸ 汽轮机 K-500-65/3000</div>
+    <div class="turbine-box">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span class="dear-name">Тurbine + Generator</span>
+        <span style="font-family:'Orbitron';font-size:10px;color:#606060;" id="genStatus">SHUTDOWN</span>
+      </div>
+      <div class="turbine-viz">
+        <div class="turbine-stage" id="turbHp">HP</div>
+        <div class="turbine-shaft"></div>
+        <div class="turbine-stage" id="turbLp1">LP1</div>
+        <div class="turbine-shaft"></div>
+        <div class="turbine-stage" id="turbLp2">LP2</div>
+        <div class="turbine-shaft"></div>
+        <div class="turbine-stage" id="genIcon">G</div>
+      </div>
+      <div class="turbine-stats">
+        <div class="tstat">
+          <label>转速 RPM</label>
+          <b id="turbRpm">0</b>
+        </div>
+        <div class="tstat">
+          <label>有功出力</label>
+          <b id="genPower">0</b> <small style="color:#606060;font-size:10px;">MWe</small>
+        </div>
+        <div class="tstat">
+          <label>主蒸汽压力</label>
+          <b id="msPress">0.0</b> <small style="color:#606060;font-size:10px;">MPa</small>
+        </div>
+        <div class="tstat">
+          <label>主蒸汽温度</label>
+          <b id="msTemp">0</b> <small style="color:#606060;font-size:10px;">°C</small>
+        </div>
+        <div class="tstat">
+          <label>排汽背压</label>
+          <b id="exhPress">0.00</b> <small style="color:#606060;font-size:10px;">MPa</small>
+        </div>
+        <div class="tstat">
+          <label>凝汽器真空</label>
+          <b id="condVac">0.0</b> <small style="color:#606060;font-size:10px;">kPa</small>
+        </div>
+      </div>
+      <div class="gen-load-slider">
+        <label><span>发电机负荷设定</span><span><b id="loadSet">0</b>%</span></label>
+        <input type="range" class="slider" id="genLoadSlider" min="0" max="110" value="0" oninput="setGenLoad(this.value)">
+      </div>
+      <div class="bypass-slider" style="margin-top:6px;padding:8px;background:#000;border:1px solid #222;border-radius:3px;">
+        <label style="display:flex;justify-content:space-between;font-size:10px;color:#a08060;margin-bottom:4px;">
+          <span>蒸汽-给水旁路阀</span><span><b id="bypassVal" style="color:var(--text-cyan)">0</b>%</span>
+        </label>
+        <input type="range" class="slider" id="bypassSlider" min="0" max="100" value="0" oninput="setBypass(this.value)">
+      </div>
+      <div class="turbine-controls">
+        <button onclick="turbineRollUp()">🎚 冲转升速</button>
+        <button onclick="turbineSync()">⚡ 并网</button>
+        <button onclick="turbineRaiseLoad()">▲ 加负荷</button>
+        <button onclick="turbineLowerLoad()">▼ 减负荷</button>
+        <button onclick="turbineTrip('MANUAL TRIP')" class="crit">🛑 紧急脱扣</button>
+        <button onclick="setBypass(0)">✕ 关旁路</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 中列底部：系统流程图 ========== -->
+  <div class="ctrl-panel flow-panel">
+    <div class="panel-title">
+      <span>◉ 一/二回路 流程图 P&amp;ID</span>
+      <span class="tag">LIVE</span>
+    </div>
+    <div class="flow-diagram">
+      <svg class="flow-svg" viewBox="0 0 900 200" preserveAspectRatio="xMidYMid meet">
+        <!-- 定义渐变 -->
+        <defs>
+          <linearGradient id="coolHot" x1="0" x2="1">
+            <stop offset="0%" stop-color="#3080c0"/>
+            <stop offset="100%" stop-color="#ff6030"/>
+          </linearGradient>
+          <linearGradient id="steam" x1="0" x2="1">
+            <stop offset="0%" stop-color="#ff6030"/>
+            <stop offset="100%" stop-color="#ffc080"/>
+          </linearGradient>
+        </defs>
+        <!-- 堆芯 -->
+        <rect x="20" y="70" width="110" height="60" rx="6" fill="#1a0a00" stroke="#ff6000" stroke-width="2"/>
+        <text x="75" y="102" text-anchor="middle" fill="#ff9000" font-family="Orbitron" font-size="11">REACTOR</text>
+        <text x="75" y="118" text-anchor="middle" fill="#806040" font-size="9" id="svgPower">0 MWt</text>
+        <!-- 一回路出口热管 -->
+        <path d="M130,85 L200,85 L200,50 L340,50" fill="none" stroke="url(#coolHot)" stroke-width="4"/>
+        <path d="M130,115 L200,115 L200,150 L340,150" fill="none" stroke="url(#coolHot)" stroke-width="4"/>
+        <!-- 蒸汽发生器SGx4 -->
+        <g id="sg-group">
+          <rect x="260" y="20" width="70" height="50" rx="4" fill="#1a1a0a" stroke="#b08030" stroke-width="1.5"/>
+          <text x="295" y="42" text-anchor="middle" fill="#b08030" font-family="Orbitron" font-size="8">SG-1</text>
+          <text x="295" y="56" text-anchor="middle" fill="#606060" font-size="8" id="sg1stat">冷</text>
+          <rect x="350" y="20" width="70" height="50" rx="4" fill="#1a1a0a" stroke="#b08030" stroke-width="1.5"/>
+          <text x="385" y="42" text-anchor="middle" fill="#b08030" font-family="Orbitron" font-size="8">SG-2</text>
+          <text x="385" y="56" text-anchor="middle" fill="#606060" font-size="8" id="sg2stat">冷</text>
+          <rect x="260" y="130" width="70" height="50" rx="4" fill="#1a1a0a" stroke="#b08030" stroke-width="1.5"/>
+          <text x="295" y="152" text-anchor="middle" fill="#b08030" font-family="Orbitron" font-size="8">SG-3</text>
+          <text x="295" y="166" text-anchor="middle" fill="#606060" font-size="8" id="sg3stat">冷</text>
+          <rect x="350" y="130" width="70" height="50" rx="4" fill="#1a1a0a" stroke="#b08030" stroke-width="1.5"/>
+          <text x="385" y="152" text-anchor="middle" fill="#b08030" font-family="Orbitron" font-size="8">SG-4</text>
+          <text x="385" y="166" text-anchor="middle" fill="#606060" font-size="8" id="sg4stat">冷</text>
+        </g>
+        <!-- 主循环泵组 -->
+        <g id="mcp-group-svg">
+          <circle cx="220" cy="50" r="12" fill="#001500" stroke="#00ff40" stroke-width="1.5" class="mcp-svg-1"/>
+          <text x="220" y="54" text-anchor="middle" fill="#00ff40" font-size="7" font-weight="bold">1A</text>
+          <circle cx="220" cy="150" r="12" fill="#001500" stroke="#00ff40" stroke-width="1.5" class="mcp-svg-1"/>
+          <text x="220" y="154" text-anchor="middle" fill="#00ff40" font-size="7" font-weight="bold">1B</text>
+        </g>
+        <!-- 冷管返回堆芯 -->
+        <path d="M260,85 L130,85" fill="none" stroke="#3080c0" stroke-width="4"/>
+        <path d="M260,115 L130,115" fill="none" stroke="#3080c0" stroke-width="4"/>
+        <!-- 蒸汽管到汽轮机 -->
+        <path d="M420,45 L500,45 L500,80" fill="none" stroke="url(#steam)" stroke-width="5"/>
+        <path d="M420,155 L500,155 L500,120" fill="none" stroke="url(#steam)" stroke-width="5"/>
+        <path d="M500,100 L580,100" fill="none" stroke="url(#steam)" stroke-width="6"/>
+        <text x="520" y="88" fill="#ff9060" font-size="9">MAIN STEAM</text>
+        <!-- 汽轮机 -->
+        <rect x="580" y="75" width="120" height="50" rx="4" fill="#1a1000" stroke="#ff9000" stroke-width="2"/>
+        <text x="640" y="97" text-anchor="middle" fill="#ff9000" font-family="Orbitron" font-size="10">TURBINE</text>
+        <line x1="700" y1="100" x2="730" y2="100" stroke="#604020" stroke-width="3"/>
+        <!-- 发电机 -->
+        <rect x="730" y="75" width="80" height="50" rx="4" fill="#000a14" stroke="#30a0ff" stroke-width="2"/>
+        <text x="770" y="97" text-anchor="middle" fill="#30a0ff" font-family="Orbitron" font-size="10">GEN</text>
+        <text x="770" y="112" text-anchor="middle" fill="#606060" font-size="8" id="svgGenPower">0 MWe</text>
+        <!-- 排汽到凝汽器 -->
+        <path d="M640,125 L640,155 L820,155 L820,170" fill="none" stroke="#8080c0" stroke-width="4"/>
+        <!-- 凝汽器 -->
+        <rect x="800" y="170" width="80" height="25" rx="3" fill="#0a0a1a" stroke="#6060a0" stroke-width="1.5"/>
+        <text x="840" y="187" text-anchor="middle" fill="#6060a0" font-size="8">COND</text>
+        <!-- 冷凝水 -> 除氧器 -->
+        <path d="M800,182 L180,182 L180,60" fill="none" stroke="#3080c0" stroke-width="2.5" stroke-dasharray="4,3"/>
+        <!-- 除氧器 -->
+        <rect x="150" y="45" width="50" height="25" rx="3" fill="#0a1a1a" stroke="#30a0c0" stroke-width="1.5"/>
+        <text x="175" y="61" text-anchor="middle" fill="#30a0c0" font-size="7">DEA</text>
+        <!-- 除氧器到主泵/堆芯 -->
+        <path d="M200,57.5 L220,57.5" fill="none" stroke="#3080c0" stroke-width="3"/>
+        <!-- 图例 -->
+        <g transform="translate(20,5)">
+          <circle cx="6" cy="6" r="4" fill="#3080c0"/><text x="16" y="10" font-size="9" fill="#808080">水/冷却水</text>
+          <line x1="80" y1="6" x2="110" y2="6" stroke="#ff6030" stroke-width="3"/><text x="116" y="10" font-size="9" fill="#808080">蒸汽</text>
+          <line x1="170" y1="6" x2="200" y2="6" stroke="#3080c0" stroke-width="2" stroke-dasharray="3,2"/><text x="206" y="10" font-size="9" fill="#808080">冷凝回流</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ========== 警报栏 ========== -->
+  <div class="alarm-bar">
+    <div class="alarm-bar-title">
+      <span>⚠ 警报与事件记录 ANNUNCIATOR & EVENT LOG</span>
+      <span style="color:#606060;" onclick="document.getElementById('alarmLog').innerHTML=''">[清屏]</span>
+    </div>
+    <div class="alarm-log" id="alarmLog"></div>
+  </div>
+
+</div>
+
+<script>
+/* ======================================================
+   RBMK-1000 反应堆模拟器 核心物理与控制模型
+   基于简化的点堆动力学 + 热工水力耦合模型
+   ====================================================== */
+
+// ============ 全局仿真状态 ============
+var SIM = {
+  time: 0,          // 仿真时间(s)
+  speed: 1,         // 仿真速度倍率
+  running: true,
+  scrammed: false,  // SCRAM状态
+  scramTimer: 0,    // SCRAM停堆后持续计时
+  startupPhase: 0,  // 启动阶段 0=停堆 1=加热 2=临界 3=升功率 4=满功率
+};
+
+// ============ 反应堆物理 ============
+var REACTOR = {
+  thermalPower: 0,    // MWt 热功率
+  targetPower: 0,     // 设定功率
+  neutronFlux: 0,     // 中子通量
+  rho: -0.05,         // 反应性 (以β为单位, β≈0.0065)
+  rho_fuel: 0,        // 燃料温度反馈(Doppler)
+  rho_void: 0,        // 空泡反应性反馈(正空泡系数！)
+  rho_xe: 0,          // Xe-135氙毒反应性
+  rho_rods: -0.08,    // 控制棒总吸收
+  rho_coolant: 0,     // 慢化剂温度反馈
+  Xe135: 0,           // Xe-135 浓度
+  I135: 0,            // I-135 浓度
+  avgFuelTemp: 20,    // 堆芯平均温度°C
+  peakFuelTemp: 20,   // 峰值燃料温度°C
+  claddingTemp: 20,
+  voidFraction: 0,    // 堆芯平均空泡份额%
+  coreMelted: false,
+  channelDamage: 0,
+  coreInletT: 20,     // 冷段入口(用于显示)
+  coreOutletT: 20,    // 热段出口(用于显示)
+  dnbChannels: 0,     // DNB偏离泡核沸腾通道数
+  blockedChannels: 0, // 蒸汽堵塞通道数
+  maxLocalVoid: 0,    // 最大局部空泡
+  steamJamEvents: 0,  // 累计蒸汽卡棒次数
+  thermalJamEvents: 0,// 累计热变形卡棒次数
+  inletT: 20, outletT: 20, coreDeltaT: 0, voidCoeff: 0,
+};
+
+// 简化点堆动力学参数 (RBMK 典型值)
+var BETA_EFF = 0.0065;    // 缓发中子份额
+var LAMBDA = 0.0001;      // 瞬发中子寿命(s)
+var DECAY_LAMBDAS = [0.0127, 0.0317, 0.115, 0.311, 1.40, 3.87]; // 缓发先驱核衰变常数
+var BETA_FRACS = [0.033, 0.219, 0.196, 0.395, 0.115, 0.042];     // 各组份额
+var precursors = [0,0,0,0,0,0];
+
+// ============ 控制棒系统 121 根 (左列交互网格) ============
+// 真实RBMK控制棒总数=蓝139手控+白24AZ-5+绿12平均+青12LAC+黄24轴向短 = 211根,
+// 交互只选其中 121 根做成 11×11 点击网络, 其余 90 根以 "同色通道格" 的方式
+// 存在于 47×47 的真通道图物理中(参与流量/温度/功率/蒸汽卡棒), 但不额外提供按钮避免UI太挤.
+var TOTAL_RODS = 121;
+var RODS = [];
+var CHANNELS = [];   // 47x47 真实RBMK堆芯通道 (含图例所有类型)
+var CH_GRID = 47;    // 47×47裁圆+八角切,有效格≈1690,正好匹配图中1661燃料+139+24+12+12+84+24+48+130+8=2142→
+                       // 1661燃料 + (211控制棒+84+48+130+8) = 1661+481=2142, 47²=2209, 裁掉约69格=正好匹配
+var CH_RADIUS = 22.2;
+// 通道类型
+var CH_TYPE = {
+  FUEL:      'F',  // 灰 燃料通道
+  MANUAL_CR: 'M',  // 蓝 手动控制棒 139
+  AZ_CR:     'Z',  // 白 应急保护(AZ-5)控制棒 24
+  AVG_AUTO_CR:'G', // 绿 平均功率自动控制棒 12
+  LAC_LEP_CR:'L',  // 浅青 LAC/LEP控制棒 12
+  AX_DET:    'D',  // 白细长 轴向功率分布探测器 84 (实际图中是细7束, 简化为白格)
+  AX_SHORT:  'Y',  // 黄 轴向短控制棒 24
+  LAC_DET:   'O',  // 橙 LAC/LEP探测器 48
+  RAD_DET:   'P',  // 紫 径向功率分布探测器 130
+  FISSION:   'K',  // 黑 核裂变计数管 8
+};
+var CH_COLOR = {
+  F: '#7a7a7a', M: '#3070ff', Z: '#ffffff', G: '#30e060',
+  L: '#40e0e0', D: '#f5f5f5', Y: '#f5e040', O: '#e88030',
+  P: '#b040e0', K: '#101010',
+};
+// 目标数量(图中标注)
+var CH_TARGETS = { M:139, Z:24, G:12, L:12, D:84, Y:24, O:48, P:130, K:8 };
+// 棒映射: 左列控制棒网格 (r∈0..10, c∈0..10) 对应 CHANNELS 47x47 的 (ROW_MAP[r], COL_MAP[c])
+// 均匀分布 11点: idx * (47-1)/10 = idx * 4.6 → 取整
+var ROD_TO_CH = []; (function(){ for (var i=0;i<11;i++) ROD_TO_CH.push(Math.round(i * 4.6)); })();
+// 环路归属(通道列→Loop1-4: 列0-11 Loop1, 12-23 Loop2, 24-35 Loop3, 36-46 Loop4)
+var loopOfCol47 = function(c) { return c < 12 ? 1 : (c < 24 ? 2 : (c < 36 ? 3 : 4)); };
+
+function initChannels() {
+  CHANNELS.length = 0;
+  // --- 0. 计算 121 个交互棒对应的 47×47 坐标 → rodPosSet / rodPosArr / rodPosMap
+  var ROW_MAP = [], COL_MAP = [];
+  (function(){ for (var i=0;i<11;i++) { ROW_MAP.push(Math.round(i * 4.6)); COL_MAP.push(Math.round(i * 4.6)); } })();
+  var rodPosMap = {};     // key "r,c" -> {rr, cc}
+  var rodPosList = [];    // [{r,c,rr,cc}, ...] 按 (rr,cc) 顺序 共121项
+  for (var rr0 = 0; rr0 < 11; rr0++) {
+    for (var cc0 = 0; cc0 < 11; cc0++) {
+      var rrp = ROW_MAP[rr0], ccp = COL_MAP[cc0];
+      var kk0 = rrp+','+ccp;
+      rodPosMap[kk0] = {rr: rr0, cc: cc0};
+      rodPosList.push({r:rrp, c:ccp, rr:rr0, cc:cc0});
+    }
+  }
+  var inRodPos = function(r,c){ return !!rodPosMap[r+','+c]; };
+
+  // --- 1. 先按圆盘裁边, 全部设为FUEL; 统计有效格数 valid[] ---
+  var valid = [];     // {r,c}
+  var cx = (CH_GRID-1)/2, cy = (CH_GRID-1)/2;
+  for (var r = 0; r < CH_GRID; r++) {
+    for (var c = 0; c < CH_GRID; c++) {
+      var dx = r-cx, dy = c-cy;
+      // 图中是大圆盘+四个小切角(类似正八边形)
+      var inside = (dx*dx + dy*dy) <= CH_RADIUS*CH_RADIUS;
+      // 四个角额外裁(近似通道图的45°切)
+      if (inside && Math.abs(dx) + Math.abs(dy) > 31) inside = false;
+      if (inside) valid.push({r:r, c:c});
+    }
+  }
+  // --- 2. 初始化所有通道为FUEL (2209个 47×47) ---
+  for (var r2 = 0; r2 < CH_GRID; r2++) {
+    for (var c2 = 0; c2 < CH_GRID; c2++) {
+      var dx2 = r2-cx, dy2 = c2-cy;
+      var euc = Math.sqrt(dx2*dx2+dy2*dy2);
+      // 功率密度分布: 实测径向余弦+峰化,中心高 约1.22 外圈约0.55
+      var radial = 0.55 + 0.70*Math.cos(dx2*0.102)*Math.cos(dy2*0.102) - euc*0.008;
+      var pd = Math.max(0.18, radial * (1 + (Math.sin(r2*1.3+c2*0.7))*0.015));
+      CHANNELS.push({
+        r: r2, c: c2,
+        inside: false,
+        loop: loopOfCol47(c2),
+        type: CH_TYPE.FUEL,
+        powerDensity: pd,
+        flowArea: 1 + ((r2*7+c2*13)%100-50)/1800,  // 0.97~1.03 随机流道面积分布(确定)
+        tempIn: 20, tempOut: 20, fuelT: 20, cladT: 20,
+        voidFrac: 0, flowFrac: 1, dnb:false, blocked:false, dmg:0,
+        rodRR: -1, rodCC: -1,
+      });
+    }
+  }
+  // --- 3. 严格按通道图把 rodPos 121 个交互格 分配为 5种控制棒类型:
+  //     配额: AZ(白) 24 / 平均(绿) 12 / LAC(青) 12 / 短棒(黄) 2 / 手动(蓝) 71 = 121
+  //     策略:
+  //       a) 先按交互格 (rr,cc) 的"中心距离/象限"模式分配 Z/G/L/Y；剩余填 M（蓝手动）
+  //       b) 完成 rodPos 后，再把非rodPos的inside格补足 手动:139 / AZ:24 / 绿12 / 青12 / 黄24 / D84 / O48 / P130 / K8
+  //       (即 rodPos 里 Z/G/L/Y 如果没到 24/12/12/24，就把差额补到非rodPos的inside格；M的总目标139)
+  var idx = function(r,c) { return r*CH_GRID + c; };
+  valid.forEach(function(v){ CHANNELS[idx(v.r,v.c)].inside = true; });
+
+  // 工具
+  var picks = function(count, predicate) {
+    var list = [];
+    for (var pi = 0; pi < valid.length; pi++) { var vv = valid[pi]; if (predicate(vv)) list.push(vv); }
+    var res = [];
+    if (list.length === 0) return res;
+    var step = list.length / count;
+    for (var i = 0; i < count; i++) {
+      var k = Math.floor((i + 0.5) * step) % list.length;
+      res.push(list[k]);
+    }
+    return res;
+  };
+  var inCore = function(v) { return CHANNELS[idx(v.r,v.c)].inside; };
+  var notRod = function(v) { return !inRodPos(v.r, v.c); };
+  var notAssigned = function(v) { return CHANNELS[idx(v.r,v.c)].type === CH_TYPE.FUEL; };
+  var centerBand = function(min,max) { return function(v) {
+    var dx = v.r - cx, dy = v.c - cy;
+    var e = Math.sqrt(dx*dx+dy*dy);
+    return e >= min && e <= max;
+  }; };
+  var assign = function(arr, type) {
+    for (var ai = 0; ai < arr.length; ai++) {
+      var v = arr[ai];
+      var ch = CHANNELS[idx(v.r, v.c)];
+      if (!ch || !ch.inside) continue;
+      ch.type = type;
+    }
+  };
+
+  // 3.1 把 rodPos 121 格分成 Z(24)/G(12)/L(12)/Y(2)/M(71)
+  //     使用精确 (rr,cc) 坐标列表（确定性，无pool大小问题）：
+  {
+    // 预先把全部 rodPos 设 FUEL
+    for (var ci0 = 0; ci0 < rodPosList.length; ci0++) {
+      var p0 = rodPosList[ci0];
+      var ch0 = CHANNELS[idx(p0.r, p0.c)];
+      if (ch0 && ch0.inside) ch0.type = CH_TYPE.FUEL;
+    }
+
+    // Y短棒 2根: 中心 (5,5) 与 中十字上 (5,1) 附近 2 个确定位置
+    var yTargets = [[5,5],[5,1]];
+    var yPicks = [];
+    for (var yi = 0; yi < yTargets.length; yi++) {
+      var rr1 = yTargets[yi][0], cc1 = yTargets[yi][1];
+      for (var yj = 0; yj < rodPosList.length; yj++) {
+        if (rodPosList[yj].rr === rr1 && rodPosList[yj].cc === cc1) {
+          yPicks.push(rodPosList[yj]); break;
+        }
+      }
+    }
+    for (var ypi = 0; ypi < yPicks.length; ypi++) {
+      var chY = CHANNELS[idx(yPicks[ypi].r,yPicks[ypi].c)];
+      if (chY && chY.inside) chY.type = CH_TYPE.AX_SHORT;
+    }
+
+    // Z白应急棒 24根: 十字主轴 (rr=5 全列 11 根 + cc=5 全行 11 根, 中心(5,5)重合 = 21 根) + 内环四角 3 个补足 = 24
+    // 十字 21 根:
+    var zPicks = [];
+    var zAdded = {};
+    function addZAt(rrZ, ccZ) {
+      var k = rrZ+','+ccZ;
+      if (zAdded[k]) return false;
+      for (var zi = 0; zi < rodPosList.length; zi++) {
+        var rp = rodPosList[zi];
+        if (rp.rr === rrZ && rp.cc === ccZ) {
+          var chZ = CHANNELS[idx(rp.r, rp.c)];
+          if (!chZ || !chZ.inside) return false;
+          if (chZ.type !== CH_TYPE.FUEL) return false; // 被短棒等占用则跳过
+          chZ.type = CH_TYPE.AZ_CR;
+          zAdded[k] = true;
+          zPicks.push(rp);
+          return true;
+        }
+      }
+      return false;
+    }
+    for (var zr = 0; zr < 11; zr++) addZAt(zr, 5);
+    for (var zc = 0; zc < 11; zc++) addZAt(5, zc);
+    // 补足 24 (差 3 个): 内环四角 (4,4)(4,6)(6,4)(6,6) 顺序选 3 个
+    var zExtraSlots = [[4,4],[4,6],[6,4],[6,6],[3,5],[5,3],[7,5],[5,7]];
+    for (var zei = 0; zei < zExtraSlots.length && zPicks.length < 24; zei++) {
+      if (addZAt(zExtraSlots[zei][0], zExtraSlots[zei][1])) zPicks.length++; // addZAt内部已ch.type=Z, 这里只是推进length计数
+    }
+    // 修正 zPicks 真实长度(刚才递增的是假的): 重新统计
+    var zCount = 0;
+    for (var zci = 0; zci < rodPosList.length; zci++) {
+      var rpZ = rodPosList[zci];
+      var czz = CHANNELS[idx(rpZ.r, rpZ.c)];
+      if (czz && czz.inside && czz.type === CH_TYPE.AZ_CR) zCount++;
+    }
+    // 如果还没到24, 继续从 (3,3)(3,7)(7,3)(7,7)(2,5)(5,2)(8,5)(5,8)(1,5)(5,1)(9,5)(5,9) 顺序补 (注意(5,1)已被短棒占)
+    if (zCount < 24) {
+      var zMoreSlots = [[3,3],[3,7],[7,3],[7,7],[2,5],[5,2],[8,5],[5,8],[1,5],[5,9],[9,5],[0,5],[5,0],[10,5],[5,10],[5,1]];
+      for (var zmi = 0; zmi < zMoreSlots.length && zCount < 24; zmi++) {
+        if (addZAt(zMoreSlots[zmi][0], zMoreSlots[zmi][1])) zCount++;
+      }
+    }
+
+    // G 绿平均棒 12根: 以 (2,2)(2,5)(2,8)(5,2)(5,8)(8,2)(8,5)(8,8) 为主8个, 再加4个 (3,3)(3,7)(7,3)(7,7) = 12
+    var gSlots = [[2,2],[2,8],[8,2],[8,8],[2,4],[2,6],[4,2],[6,2],[4,8],[6,8],[8,4],[8,6],[3,3],[3,7],[7,3],[7,7]];
+    var gCount = 0;
+    for (var gi = 0; gi < gSlots.length && gCount < 12; gi++) {
+      for (var gj = 0; gj < rodPosList.length; gj++) {
+        var rg = rodPosList[gj];
+        if (rg.rr !== gSlots[gi][0] || rg.cc !== gSlots[gi][1]) continue;
+        var chG = CHANNELS[idx(rg.r, rg.c)];
+        if (!chG || !chG.inside) continue;
+        if (chG.type !== CH_TYPE.FUEL) continue;
+        chG.type = CH_TYPE.AVG_AUTO_CR; gCount++; break;
+      }
+    }
+    // 若不足 12, 从切比雪夫距离3且非十字/非Z的位置遍历补
+    if (gCount < 12) {
+      for (var rgg = 0; rgg < rodPosList.length && gCount < 12; rgg++) {
+        var rg2 = rodPosList[rgg];
+        var d2 = Math.max(Math.abs(rg2.rr-5), Math.abs(rg2.cc-5));
+        if (d2 !== 3) continue;
+        if (rg2.rr === 5 || rg2.cc === 5) continue;
+        var chG2 = CHANNELS[idx(rg2.r, rg2.c)];
+        if (!chG2 || !chG2.inside) continue;
+        if (chG2.type !== CH_TYPE.FUEL) continue;
+        chG2.type = CH_TYPE.AVG_AUTO_CR; gCount++;
+      }
+    }
+
+    // L 青LAC/LEP 12根: 以 (1,1)(1,10)(10,1)(10,10) 四角, 加 (1,5)(5,1)(5,10)(10,5)(1,3)(3,1)(3,10)(10,3) = 12; 但若(5,1)被短棒/Z占用则跳过补最外圈
+    var lSlots = [[1,1],[1,10],[10,1],[10,10],[0,1],[1,0],[0,10],[10,0],[0,5],[5,0],[5,10],[10,5],[1,3],[3,1],[3,9],[9,3],[7,10],[10,7],[1,7],[7,1]];
+    var lCount = 0;
+    for (var li = 0; li < lSlots.length && lCount < 12; li++) {
+      for (var lj = 0; lj < rodPosList.length; lj++) {
+        var rl = rodPosList[lj];
+        if (rl.rr !== lSlots[li][0] || rl.cc !== lSlots[li][1]) continue;
+        var chL = CHANNELS[idx(rl.r, rl.c)];
+        if (!chL || !chL.inside) continue;
+        if (chL.type !== CH_TYPE.FUEL) continue;
+        chL.type = CH_TYPE.LAC_LEP_CR; lCount++; break;
+      }
+    }
+    // 若不足 12, 从切比雪夫距离 5 补
+    if (lCount < 12) {
+      for (var rlg = 0; rlg < rodPosList.length && lCount < 12; rlg++) {
+        var rl2 = rodPosList[rlg];
+        var d3 = Math.max(Math.abs(rl2.rr-5), Math.abs(rl2.cc-5));
+        if (d3 < 4) continue;
+        var chL2 = CHANNELS[idx(rl2.r, rl2.c)];
+        if (!chL2 || !chL2.inside) continue;
+        if (chL2.type !== CH_TYPE.FUEL) continue;
+        chL2.type = CH_TYPE.LAC_LEP_CR; lCount++;
+      }
+    }
+
+    // M 手动(蓝): 剩下的 rodPos 里所有 FUEL 全填 M (保证合计=71)
+    var mCount = 0;
+    for (var ci1 = 0; ci1 < rodPosList.length; ci1++) {
+      var p1 = rodPosList[ci1];
+      var ch1 = CHANNELS[idx(p1.r, p1.c)];
+      if (!ch1 || !ch1.inside) continue;
+      if (ch1.type === CH_TYPE.FUEL) { ch1.type = CH_TYPE.MANUAL_CR; mCount++; }
+    }
+  }
+
+  // 3.2 非rodPos的inside格 补足 全局 目标数
+  //     各类型在 rodPos 中已有多少
+  var curInRod = {};
+  curInRod[CH_TYPE.MANUAL_CR]   = 0;
+  curInRod[CH_TYPE.AZ_CR]       = 0;
+  curInRod[CH_TYPE.AVG_AUTO_CR] = 0;
+  curInRod[CH_TYPE.LAC_LEP_CR]  = 0;
+  curInRod[CH_TYPE.AX_SHORT]    = 0;
+  for (var ci2 = 0; ci2 < rodPosList.length; ci2++) {
+    var p2 = rodPosList[ci2];
+    var ch2 = CHANNELS[idx(p2.r, p2.c)];
+    if (!ch2 || !ch2.inside) continue;
+    if (curInRod[ch2.type] !== undefined) curInRod[ch2.type]++;
+  }
+  // 非 rodPos 中补够 全局目标 (rodPos 中已经包含了 Z(24)/G(12)/L(12)/Y(2)/M(71))
+  var needZ = 0;
+  var needG = 0;
+  var needL = 0;
+  var needY = Math.max(0, 24 - curInRod[CH_TYPE.AX_SHORT]); // 短棒在rodPos只放了2个, 外面补 22
+  var needM = Math.max(0, 139 - curInRod[CH_TYPE.MANUAL_CR]); // 手动补 139-71=68
+
+  // Z十字补足（非rodPos）: 在中心十字(r=23 或 c=23) 的非rod、未分配、inside
+  if (needZ > 0) {
+    var zExtra = [];
+    for (var zk = 0; zk < CH_GRID; zk++) {
+      if (CHANNELS[idx(23,zk)].inside && !inRodPos(23,zk) && notAssigned({r:23,c:zk})) zExtra.push({r:23,c:zk});
+      if (zk !== 23 && CHANNELS[idx(zk,23)].inside && !inRodPos(zk,23) && notAssigned({r:zk,c:23})) zExtra.push({r:zk,c:23});
+    }
+    var zMap = {}; for (var zi=0;zi<zExtra.length;zi++){ var zv=zExtra[zi]; zMap[zv.r+'_'+zv.c]=zv; }
+    var zList = []; for (var zk2 in zMap) zList.push(zMap[zk2]);
+    zList.sort(function(a,b){ return (Math.abs(a.r-23)+Math.abs(a.c-23)) - (Math.abs(b.r-23)+Math.abs(b.c-23)); });
+    var zPick = []; for (var zp=0; zp<Math.min(needZ, zList.length); zp++) zPick.push(zList[zp]);
+    assign(zPick, CH_TYPE.AZ_CR);
+  }
+  if (needG > 0) assign(picks(needG, function(v){ return inCore(v) && notAssigned(v) && notRod(v) && centerBand(8,13)(v); }), CH_TYPE.AVG_AUTO_CR);
+  if (needL > 0) assign(picks(needL, function(v){ return inCore(v) && notAssigned(v) && notRod(v) && centerBand(14,19)(v); }), CH_TYPE.LAC_LEP_CR);
+  if (needY > 0) assign(picks(needY, function(v){ return inCore(v) && notAssigned(v) && notRod(v) && centerBand(4,8)(v); }), CH_TYPE.AX_SHORT);
+  if (needM > 0) assign(picks(needM, function(v){ return inCore(v) && notAssigned(v) && notRod(v) && centerBand(3,22)(v); }), CH_TYPE.MANUAL_CR);
+
+  // 3.3 探测器/计数管 (尽量非rodPos)
+  assign(picks(130, function(v){ return inCore(v) && notAssigned(v) && notRod(v) && centerBand(2,22)(v); }), CH_TYPE.RAD_DET);
+  assign(picks(48, function(v){ return inCore(v) && notAssigned(v) && notRod(v) && centerBand(15,21)(v); }), CH_TYPE.LAC_DET);
+  // 轴向探测器(白格D) 84根 → 7行 × 每行12个
+  {
+    var rows = [11, 15, 19, 23, 27, 31, 35];
+    var detPerRow = 12;
+    for (var ri = 0; ri < rows.length; ri++) {
+      var row = rows[ri];
+      var cand = [];
+      for (var fvi = 0; fvi < valid.length; fvi++) {
+        var vrv = valid[fvi];
+        if (vrv.r===row && notAssigned(vrv) && !inRodPos(vrv.r, vrv.c)) cand.push(vrv);
+      }
+      // cand 内按步长选 detPerRow 个
+      var chosen = [];
+      if (cand.length > 0) {
+        var stepR = cand.length / detPerRow;
+        for (var cyi = 0; cyi < detPerRow; cyi++) {
+          var ik = Math.floor((cyi + 0.5) * stepR) % cand.length;
+          chosen.push(cand[ik]);
+        }
+      }
+      assign(chosen, CH_TYPE.AX_DET);
+    }
+  }
+  // 黑裂变计数管 8个 → 8个象限/边角 外圈
+  assign(picks(8, function(v){ return inCore(v) && notAssigned(v) && centerBand(18,23)(v); }), CH_TYPE.FISSION);
+  // 将每个通道记录 rodRR/rodCC: 反向查最近 11×11 棒位, 方便卡棒/显示联动
+  valid.forEach(function(v){
+    var ch = CHANNELS[idx(v.r,v.c)];
+    var rr = Math.max(0, Math.min(10, Math.round(v.r / 4.6)));
+    var cc = Math.max(0, Math.min(10, Math.round(v.c / 4.6)));
+    ch.rodRR = rr; ch.rodCC = cc;
+  });
+}
+
+function initRods() {
+  RODS.length = 0;
+  var gridSize = 11;
+  var chIdx = function(r,c){ return r*CH_GRID + c; };
+  // 每种棒位显示颜色(在左列棒位网格)
+  var GROUP_LABEL = {};
+  GROUP_LABEL[CH_TYPE.MANUAL_CR]    = {g:'手动', color:'#3070ff'};
+  GROUP_LABEL[CH_TYPE.AZ_CR]        = {g:'AZ',   color:'#ffffff'};
+  GROUP_LABEL[CH_TYPE.AVG_AUTO_CR]  = {g:'平均', color:'#30e060'};
+  GROUP_LABEL[CH_TYPE.LAC_LEP_CR]   = {g:'LAC',  color:'#40e0e0'};
+  GROUP_LABEL[CH_TYPE.AX_SHORT]     = {g:'短棒', color:'#f5e040'};
+  for (var i = 0; i < TOTAL_RODS; i++) {
+    var row = Math.floor(i / gridSize);
+    var col = i % gridSize;
+    var chRow = ROD_TO_CH[row], chCol = ROD_TO_CH[col];
+    var type = CH_TYPE.MANUAL_CR;
+    if (chRow >= 0 && chCol >= 0 && CHANNELS[chIdx(chRow,chCol)]) {
+      var ch = CHANNELS[chIdx(chRow,chCol)];
+      if (ch.type === CH_TYPE.AZ_CR || ch.type === CH_TYPE.AVG_AUTO_CR || ch.type === CH_TYPE.LAC_LEP_CR || ch.type === CH_TYPE.AX_SHORT || ch.type === CH_TYPE.MANUAL_CR) {
+        type = ch.type;
+      }
+    }
+    var label = GROUP_LABEL[type];
+    var typeName = '未知类型';
+    if (type === CH_TYPE.MANUAL_CR) typeName = '手动控制棒 手动操作';
+    else if (type === CH_TYPE.AZ_CR) typeName = '应急保护(AZ-5)停堆棒';
+    else if (type === CH_TYPE.AVG_AUTO_CR) typeName = '平均功率自动控制棒(APR)';
+    else if (type === CH_TYPE.LAC_LEP_CR) typeName = '局部自动/局部应急 LAC·LEP 控制棒';
+    else if (type === CH_TYPE.AX_SHORT) typeName = '轴向功率分布短控制棒';
+    RODS.push({
+      id: i+1,
+      row: row, col: col,                  // 11×11 交互网格坐标
+      chRow: chRow, chCol: chCol,              // 对应的 47×47 真实通道坐标
+      group: label.g,
+      groupColor: label.color,
+      chType: type,              // 真实类型 M/Z/G/L/Y
+      position: 100,             // 默认插入(停堆状态)
+      targetPos: 100,
+      moving: false,
+      selected: false,
+      jammed: false,
+      jammedReason: null,
+      type: typeName,
+    });
+    // AZ停堆棒初始抽出(为启动时提供后备停堆裕度)
+    if (type === CH_TYPE.AZ_CR) {
+      RODS[i].position = 0; RODS[i].targetPos = 0;
+    }
+  }
+}
+
+// ============ 泵系统 ============
+// 主循环泵 MCP: 每环路2台 (共8台模拟成4环路展示)
+// 简化为4环路 每环1泵1备 (实际每环2台主泵,这里显示8台)
+var PUMPS_MCP = [];
+var PUMPS_FWP = []; // 给水泵
+
+function initPumps() {
+  PUMPS_MCP.length = 0; PUMPS_FWP.length = 0;
+  // 8台主循环泵: Loop 1A 1B 2A 2B 3A 3B 4A 4B
+  var trains = ['A','B'];
+  for (var L2 = 1; L2 <= 4; L2++) {
+    for (var ti = 0; ti < 2; ti++) {
+      var s = trains[ti];
+      PUMPS_MCP.push({
+        id: 'MCP-'+L2+s,
+        loop: L2,
+        train: s,
+        running: false,
+        trip: false,
+        speed: 0,         // 0-100%
+        targetSpeed: 0,
+        flow: 0,          // t/h
+        current: 0,       // A
+        vibrations: 0.2,
+        dischargePress: 0,
+        cavitation: false,
+        runtime: 0,
+      });
+    }
+  }
+  // 4台给水泵
+  var fwpNames = ['FWP-1A','FWP-1B','FWP-2A','FWP-2B'];
+  for (var fi = 0; fi < 4; fi++) {
+    PUMPS_FWP.push({
+      id: fwpNames[fi],
+      running: false,
+      trip: false,
+      speed: 0,
+      flow: 0,
+      dischargePress: 0,
+    });
+  }
+}
+
+// ============ 二回路系统 ============
+var SECONDARY = {
+  deaerator: {
+    level: 60,         // %
+    pressure: 0.12,    // MPa (对应104°C饱和)
+    temperature: 104,
+    oxygen_ppb: 2000,  // ppb 初始未除氧
+    flowIn: 0,
+    flowOut: 0,
+    steamHeating: false,
+    ventOpen: false,
+    load: 0,
+  },
+  sg: [ // 4台蒸汽发生器
+    {level: 50, pressure: 0.0, temp: 25, flow: 0},
+    {level: 50, pressure: 0.0, temp: 25, flow: 0},
+    {level: 50, pressure: 0.0, temp: 25, flow: 0},
+    {level: 50, pressure: 0.0, temp: 25, flow: 0},
+  ],
+  mainSteam: {
+    pressure: 0.0,     // MPa
+    temperature: 20,
+    flow: 0,           // t/h
+  },
+  condenser: {
+    vacuum: 101.0,     // kPa绝对压力 (大气压)，真空=101-vacuum
+    backpressure: 0.101,
+    level: 50,
+    temp: 20,
+  },
+};
+
+// ============ 汽轮发电机组 ============
+var TURBINE = {
+  running: false,
+  tripped: false,
+  rpm: 0,
+  targetRpm: 0,
+  generatorOnline: false,
+  genPower: 0,        // MWe
+  genLoadSet: 0,      // % (0-110)
+  hpStageTemp: 20,
+  ipStageTemp: 20,
+  lpStageTemp: 20,
+  vibration: 0.1,
+  thrustBearingTemp: 35,
+  exhaustTemp: 20,
+  bypassValve: 0,     // 0-100%
+  tripValveOpen: false, // 主汽门
+  govValveOpen: 0,    // 调门开度
+  rollUpPhase: 0,     // 冲转阶段
+};
+
+// ============ 自动控制模式 ============
+var AUTO = {
+  mode: 'manual',
+  setpoint: 1000,     // MWt
+  integralTerm: 0,
+  prevError: 0,
+};
+
+// ============ UI初始化 ============
+function initUI() {
+  // 生成控制棒网格: 11×11 共121个, 每个cell按真实类型上色 type-M/Z/G/L/Y
+  var rodGrid = document.getElementById('rodGrid');
+  rodGrid.innerHTML = '';
+  for (var iui = 0; iui < RODS.length; iui++) {
+    (function(i2){
+      var rod = RODS[i2];
+      var cell = document.createElement('div');
+      cell.className = 'rod-cell type-' + (rod.chType || 'M');
+      if (rod.jammed) cell.classList.add('jammed');
+      cell.dataset.idx = i2;
+      cell.dataset.tip = '#' + rod.id + ' ' + rod.group + ' ' + rod.type;
+      cell.addEventListener('click', function(ev){ selectRod(i2, ev); });
+      rodGrid.appendChild(cell);
+    })(iui);
+  }
+
+  // (旧) 堆芯燃料格：现中列已替换为CPS仪表，DOM已移除，跳过
+  var coreInner = document.getElementById('coreInner');
+  if (coreInner) {
+    coreInner.innerHTML = '';
+    for (var iu2 = 0; iu2 < 49; iu2++) {
+      var c2 = document.createElement('div');
+      c2.className = 'core-fuel-cell';
+      c2.id = 'fuelCell' + iu2;
+      coreInner.appendChild(c2);
+    }
+  }
+
+  // 生成MCP列表
+  var mcpList = document.getElementById('mcpList');
+  mcpList.innerHTML = '';
+  for (var mi = 0; mi < PUMPS_MCP.length; mi++) {
+    var p = PUMPS_MCP[mi];
+    var row = document.createElement('div');
+    row.className = 'pump-row';
+    row.id = 'mcpRow' + mi;
+    row.innerHTML = '' +
+      '<div class="pump-icon"></div>' +
+      '<div class="pump-name">' +
+      '  ' + p.id +
+      '  <small>环路 ' + p.loop + ' · ' + p.train + '列 · 主循环泵</small>' +
+      '  <div class="pump-controls">' +
+      '    <button class="pump-btn on" onclick="startPump(\'MCP\',' + mi + ')">启动</button>' +
+      '    <button class="pump-btn off" onclick="stopPump(\'MCP\',' + mi + ')">停止</button>' +
+      '    <button class="pump-btn off" onclick="tripPump(\'MCP\',' + mi + ')">脱扣</button>' +
+      '  </div>' +
+      '</div>' +
+      '<div class="pump-speed" id="mcpSpd' + mi + '">0%</div>';
+    mcpList.appendChild(row);
+  }
+
+  // 生成FWP列表
+  var fwpList = document.getElementById('fwpList');
+  fwpList.innerHTML = '';
+  for (var fwi = 0; fwi < PUMPS_FWP.length; fwi++) {
+    var p2 = PUMPS_FWP[fwi];
+    var row2 = document.createElement('div');
+    row2.className = 'pump-row';
+    row2.id = 'fwpRow' + fwi;
+    row2.innerHTML = '' +
+      '<div class="pump-icon"></div>' +
+      '<div class="pump-name">' +
+      '  ' + p2.id +
+      '  <small>给水列 ' + (fwi<2?'1':'2') + ' · 给水泵</small>' +
+      '  <div class="pump-controls">' +
+      '    <button class="pump-btn on" onclick="startPump(\'FWP\',' + fwi + ')">启动</button>' +
+      '    <button class="pump-btn off" onclick="stopPump(\'FWP\',' + fwi + ')">停止</button>' +
+      '    <button class="pump-btn off" onclick="tripPump(\'FWP\',' + fwi + ')">脱扣</button>' +
+      '  </div>' +
+      '</div>' +
+      '<div class="pump-speed" id="fwpSpd' + fwi + '">0%</div>';
+    fwpList.appendChild(row2);
+  }
+}
+
+// ============ 控制棒操作 ============
+var selectedRodIdx = -1;      // 兼容旧代码：当前主选中
+var selectedRods = new Set(); // 多选集合
+var shiftAnchor = -1;         // Shift区间选择锚点 (上一次单击/ctrl点击的idx)
+var lastNormalClick = -1;     // 非shift/非ctrl的最后单击，shift区间以此为准
+
+function selectRod(idx, event) {
+  if (SIM.scrammed && RODS[idx].group !== 'AZ') return;
+  var evt = event || window.event;
+  var ctrl = evt ? (evt.ctrlKey || evt.metaKey) : false;
+  var shiftOnly = evt ? (evt.shiftKey && !ctrl) : false;
+
+  // Shift + 点击：区间扩展
+  if (shiftOnly) {
+    var anchor = (lastNormalClick >= 0) ? lastNormalClick
+                  : ((shiftAnchor >= 0) ? shiftAnchor : idx);
+    var a = Math.min(anchor, idx), b = Math.max(anchor, idx);
+    // 如果有Ctrl，保留原有并加区间；这里shiftOnly仅在当前集合基础上补区间+区间端点
+    if (!ctrl) selectedRods.clear();
+    for (var sr = a; sr <= b; sr++) selectedRods.add(sr);
+    // 不更新shiftAnchor，但lastNormalClick不变（区间基准保持上次正常点击）
+  } else if (ctrl) {
+    // Ctrl+点击 切换
+    if (selectedRods.has(idx)) { selectedRods.delete(idx); }
+    else { selectedRods.add(idx); }
+    shiftAnchor = idx;
+  } else {
+    // 普通单击：单选
+    selectedRods.clear();
+    selectedRods.add(idx);
+    shiftAnchor = idx;
+    lastNormalClick = idx;
+  }
+
+  // 高亮同步
+  var cells = document.querySelectorAll('.rod-cell');
+  for (var ci = 0; ci < cells.length; ci++) {
+    var c = cells[ci];
+    var di = parseInt(c.dataset.idx, 10);
+    c.classList.toggle('selected', selectedRods.has(di));
+  }
+  var last = -1;
+  selectedRods.forEach(function(v){ last = v; });
+  selectedRodIdx = last;
+
+  if (selectedRodIdx < 0) {
+    document.getElementById('rodDetail').style.display = 'none';
+    document.getElementById('rodGridLabel').textContent = '（无选中）';
+    return;
+  }
+  var rod = RODS[selectedRodIdx];
+  var multi = selectedRods.size > 1;
+  document.getElementById('rodGridLabel').textContent =
+    multi ? '（已选 ' + selectedRods.size + ' 根）' : '（已选: #' + rod.id + ' 组' + rod.group + '）';
+  document.getElementById('rodDetail').style.display = 'block';
+  if (multi) {
+    document.getElementById('rodDetailTitle').textContent =
+      '批量操作 · 已选 ' + selectedRods.size + ' 根控制棒';
+  } else {
+    var jamStr = rod.jammed ? '  ⚠ ' + (rod.jammedReason || '机械卡死') : '';
+    document.getElementById('rodDetailTitle').textContent =
+      '控制棒 #' + padZ(rod.id) + '  ·  分组: ' + rod.group + '  ·  ' + rod.type + jamStr;
+  }
+  updateRodDetail();
+}
+
+function selToArray() {
+  var arr = [];
+  selectedRods.forEach(function(v){ arr.push(v); });
+  return arr;
+}
+
+function updateRodDetail() {
+  if (selectedRodIdx < 0) return;
+  var sel = selToArray();
+  // 批量取平均值 / 单棒取位置
+  var p, jammedCount = 0;
+  if (sel.length > 1) {
+    var sum = 0;
+    for (var su = 0; su < sel.length; su++) sum += RODS[sel[su]].position;
+    p = sum / sel.length;
+    jammedCount = 0;
+    for (var sf = 0; sf < sel.length; sf++) if (RODS[sel[sf]].jammed) jammedCount++;
+  } else {
+    p = RODS[selectedRodIdx].position;
+    jammedCount = RODS[selectedRodIdx].jammed ? 1 : 0;
+  }
+  document.getElementById('rodPosFill').style.width = p + '%';
+  var jamTxt = jammedCount > 0 ? '  ⚠ 卡住' + jammedCount + '根' : '';
+  document.getElementById('rodPosText').textContent = p.toFixed(0) + '%' + jamTxt;
+  var lever = document.getElementById('rodLever');
+  if (lever) lever.value = Math.round(p);
+}
+
+// 拉杆滑块
+function onRodLever(v, commit) {
+  var target = parseFloat(v);
+  var sel = selToArray();
+  if (sel.length === 0) return;
+  if (SIM.scrammed) { return; }
+  var moved = 0, skipped = 0;
+  for (var si = 0; si < sel.length; si++) {
+    var i = sel[si];
+    var rod = RODS[i];
+    if (rod.jammed) { skipped++; continue; }
+    rod.targetPos = Math.max(0, Math.min(100, target));
+    rod.moving = true;
+    moved++;
+  }
+  if (commit && moved > 0) {
+    var header = sel.length>1 ? ('批量 ' + sel.length + ' 根：') : ('棒#' + RODS[selectedRodIdx].id + ' ');
+    var skipStr = skipped ? ', 卡住' + skipped : '';
+    logMsg('INFO', header + '目标 ' + target.toFixed(0) + '% (移动' + moved + skipStr + ')');
+  }
+}
+
+function moveSelectedRod(deltaPercent) {
+  if (selectedRodIdx < 0) { logMsg('WARN','未选择控制棒'); return; }
+  if (SIM.scrammed) { logMsg('WARN','SCRAM状态下不允许手动提棒'); return; }
+  var sel = selToArray();
+  var moved = 0, skipped = 0;
+  for (var ms = 0; ms < sel.length; ms++) {
+    var rod = RODS[sel[ms]];
+    if (rod.jammed) { skipped++; continue; }
+    rod.targetPos = Math.max(0, Math.min(100, rod.position + deltaPercent));
+    rod.moving = true;
+    moved++;
+  }
+  if (moved > 0) {
+    var action = deltaPercent>0 ? '插入' : '抽出';
+    var jamStr = skipped ? ', jammed' + skipped : '';
+    logMsg('INFO', (sel.length>1 ? '批量 ' + sel.length : '单棒') + ' ' + action + ' |delta|=' + Math.abs(deltaPercent) + '% (moved' + moved + jamStr + ')');
+    document.getElementById('rodLever').value = Math.round(RODS[selectedRodIdx].targetPos);
+  }
+}
+
+// 手动卡/解 单根（当前主选中）
+function toggleJamSelected() {
+  if (selectedRodIdx < 0) { logMsg('WARN','请先选择一根控制棒'); return; }
+  var rod = RODS[selectedRodIdx];
+  rod.jammed = !rod.jammed;
+  rod.moving = false;
+  var cell = document.querySelector('.rod-cell[data-idx="' + selectedRodIdx + '"]');
+  if (cell) cell.classList.toggle('jammed', rod.jammed);
+  var msg = rod.jammed ? '#' + rod.id + ' 组' + rod.group + ' 已机械卡死（SCRAM也无法动作）'
+                       : '#' + rod.id + ' 组' + rod.group + ' 卡棒故障已恢复';
+  logMsg(rod.jammed ? 'ALRM' : 'INFO', msg);
+  updateRodDetail();
+}
+
+// 随机卡棒（运行中注入故障）
+function injectRodJamming() {
+  var movable = [];
+  for (var im = 0; im < RODS.length; im++) {
+    var r = RODS[im];
+    if (!r.jammed && r.group !== 'AZ') movable.push(r);
+  }
+  if (movable.length === 0) { logMsg('ALRM','无可卡的棒'); return; }
+  var count = 1 + Math.floor(Math.random() * 3);
+  movable.sort(function(){ return Math.random() - 0.5; });
+  var chosenRods = movable.slice(0, count);
+  for (var cr = 0; cr < chosenRods.length; cr++) {
+    var rod = chosenRods[cr];
+    rod.jammed = true;
+    rod.moving = false;
+    var idx = RODS.indexOf(rod);
+    var cell = document.querySelector('.rod-cell[data-idx="' + idx + '"]');
+    if (cell) cell.classList.add('jammed');
+  }
+  var ids = [];
+  for (var ci2 = 0; ci2 < chosenRods.length; ci2++) ids.push('#' + chosenRods[ci2].id);
+  logMsg('ALRM', '⚠ 卡棒故障注入：' + ids.join(', ') + ' 共' + count + '根');
+}
+
+function clearRodSelection() {
+  selectedRods.clear();
+  selectedRodIdx = -1;
+  shiftAnchor = -1;
+  var selCells = document.querySelectorAll('.rod-cell.selected');
+  for (var cs = 0; cs < selCells.length; cs++) selCells[cs].classList.remove('selected');
+  document.getElementById('rodGridLabel').textContent = '（无选中）';
+  document.getElementById('rodDetail').style.display = 'none';
+}
+
+function clearAllJammed() {
+  var n = 0;
+  for (var cj = 0; cj < RODS.length; cj++) {
+    var rod = RODS[cj];
+    if (rod.jammed) {
+      rod.jammed = false;
+      var cell = document.querySelector('.rod-cell[data-idx="' + cj + '"]');
+      if (cell) cell.classList.remove('jammed');
+      n++;
+    }
+  }
+  if (n === 0) logMsg('INFO','无卡棒故障需复位');
+  else logMsg('INFO', '已清除 ' + n + ' 根卡棒故障');
+  updateRodDetail();
+}
+
+function toggleAZrods(action) {
+  if (SIM.scrammed && action === 'withdraw') {
+    logMsg('WARN', 'SCRAM状态下禁止抽出AZ停堆棒'); return;
+  }
+  var target = action === 'insert' ? 100 : 0;
+  var count = 0;
+  for (var az = 0; az < RODS.length; az++) {
+    var rod = RODS[az];
+    if (rod.group !== 'AZ') continue;
+    if (rod.jammed) continue;
+    rod.targetPos = target;
+    rod.moving = true;
+    count++;
+  }
+  logMsg('INFO', 'AZ组: ' + (action==='insert'?'插入':'抽出') + ' ' + count + '根');
+}
+
+function setSelectedRodsPos(pos) {
+  if (selectedRodIdx < 0) { logMsg('WARN','未选择控制棒'); return; }
+  if (SIM.scrammed && pos < 99) { logMsg('WARN','SCRAM状态下不允许提棒'); return; }
+  var sel = selToArray();
+  var moved = 0, skipped = 0;
+  for (var ss = 0; ss < sel.length; ss++) {
+    var i = sel[ss];
+    var rod = RODS[i];
+    if (rod.jammed) { skipped++; continue; }
+    rod.targetPos = Math.max(0, Math.min(100, pos));
+    rod.moving = true;
+    moved++;
+  }
+  var lever = document.getElementById('rodLever');
+  if (lever) lever.value = Math.round(pos);
+  var skipStr = skipped ? ', 卡住' + skipped : '';
+  logMsg('INFO', '批量定位 ' + pos + '%: 已下发 ' + moved + skipStr);
+}
+
+// ============ 泵操作 ============
+function startPump(type, idx) {
+  var arr = type === 'MCP' ? PUMPS_MCP : PUMPS_FWP;
+  var p = arr[idx];
+  if (p.trip) { logMsg('WARN', p.id + ' 处于脱扣状态，先复位'); return; }
+  p.running = true;
+  p.targetSpeed = 100;
+  logMsg('INFO', p.id + ' 启动命令已下发');
+}
+function stopPump(type, idx) {
+  var arr = type === 'MCP' ? PUMPS_MCP : PUMPS_FWP;
+  var p = arr[idx];
+  p.targetSpeed = 0;
+  setTimeout(function(){ if (p.speed < 5) p.running = false; }, 3000/SIM.speed);
+  logMsg('INFO', p.id + ' 停止命令已下发');
+}
+function tripPump(type, idx) {
+  var arr = type === 'MCP' ? PUMPS_MCP : PUMPS_FWP;
+  var p = arr[idx];
+  p.trip = true; p.running = false;
+  p.targetSpeed = 0; p.speed = 0;
+  var suffix = type==='MCP' ? '⚠ 流量丢失可能触发SCRAM' : '';
+  logMsg('ALRM', p.id + ' 泵脱扣！' + suffix);
+  // 主泵脱扣若不足2台运行，触发SCRAM
+  if (type === 'MCP') {
+    var runCount = 0;
+    for (var rc = 0; rc < PUMPS_MCP.length; rc++) {
+      var pp = PUMPS_MCP[rc]; if (pp.running && !pp.trip) runCount++;
+    }
+    if (runCount < 2 && REACTOR.thermalPower > 100) {
+      setTimeout(function(){ scramReactor('MCP LOSS: ' + runCount + ' pumps running'); }, 500/SIM.speed);
+    }
+  }
+}
+
+// ============ 除氧器操作 ============
+function toggleVent(on) {
+  SECONDARY.deaerator.ventOpen = on;
+  logMsg('INFO', '除氧器排气阀 ' + (on?'开启':'关闭'));
+}
+function toggleSteam(on) {
+  SECONDARY.deaerator.steamHeating = on;
+  logMsg('INFO', '除氧器加热蒸汽 ' + (on?'投入':'切除'));
+}
+
+// ============ 汽轮机操作 ============
+function turbineRollUp() {
+  if (TURBINE.tripped) { logMsg('WARN', '汽轮机脱扣状态，先复位'); return; }
+  if (TURBINE.rpm > 500) { logMsg('WARN', '已在冲转中或运行'); return; }
+  if (SECONDARY.mainSteam.pressure < 5.5) { logMsg('WARN', '主蒸汽压力不足'); return; }
+  TURBINE.running = true;
+  TURBINE.tripValveOpen = true;
+  TURBINE.govValveOpen = 10;
+  TURBINE.targetRpm = 3000;
+  logMsg('INFO', '汽轮机冲转开始 目标3000rpm');
+}
+function turbineSync() {
+  if (TURBINE.rpm < 2980 || TURBINE.rpm > 3020) { logMsg('WARN', '转速不在同步范围 2980-3020rpm'); return; }
+  if (TURBINE.generatorOnline) return;
+  TURBINE.generatorOnline = true;
+  logMsg('INFO', '✓ 发电机断路器合闸 机组并网');
+}
+function turbineRaiseLoad() {
+  if (!TURBINE.generatorOnline) return;
+  TURBINE.genLoadSet = Math.min(110, TURBINE.genLoadSet + 5);
+  document.getElementById('genLoadSlider').value = TURBINE.genLoadSet;
+  document.getElementById('loadSet').textContent = TURBINE.genLoadSet;
+  logMsg('INFO', '加负荷至 ' + TURBINE.genLoadSet + '%');
+}
+function turbineLowerLoad() {
+  TURBINE.genLoadSet = Math.max(0, TURBINE.genLoadSet - 5);
+  document.getElementById('genLoadSlider').value = TURBINE.genLoadSet;
+  document.getElementById('loadSet').textContent = TURBINE.genLoadSet;
+  logMsg('INFO', '减负荷至 ' + TURBINE.genLoadSet + '%');
+}
+function setGenLoad(v) {
+  if (!TURBINE.generatorOnline) {
+    document.getElementById('genLoadSlider').value = 0;
+    logMsg('WARN', '未并网不能设负荷'); return;
+  }
+  TURBINE.genLoadSet = parseInt(v);
+  document.getElementById('loadSet').textContent = v;
+}
+function turbineTrip(reason) {
+  TURBINE.tripped = true;
+  TURBINE.running = false;
+  TURBINE.tripValveOpen = false;
+  TURBINE.govValveOpen = 0;
+  TURBINE.targetRpm = 0;
+  TURBINE.generatorOnline = false;
+  TURBINE.genLoadSet = 0;
+  TURBINE.genPower = 0;
+  document.getElementById('genLoadSlider').value = 0;
+  document.getElementById('loadSet').textContent = 0;
+  logMsg('ALRM', '⚠ 汽轮机脱扣！原因: ' + reason);
+  // 快开旁路
+  TURBINE.bypassValve = 80;
+  var bp = document.getElementById('bypassSlider'); if (bp) bp.value = 80;
+  var bv = document.getElementById('bypassVal');   if (bv) bv.textContent = 80;
+}
+function setBypass(v) {
+  v = Math.max(0, Math.min(100, parseFloat(v) || 0));
+  TURBINE.bypassValve = v;
+  TURBINE.bypassManual = true;
+  var bp2 = document.getElementById('bypassSlider'); if (bp2) bp2.value = v;
+  var bv2 = document.getElementById('bypassVal');   if (bv2) bv2.textContent = v.toFixed(0);
+  logMsg('INFO', '蒸汽旁路阀手动设置 ' + v.toFixed(0) + '%');
+}
+function openBypassValve() {
+  setBypass(Math.min(100, TURBINE.bypassValve + 20));
+}
+
+// ============ SCRAM ============
+function scramReactor(reason) {
+  if (SIM.scrammed) return;
+  SIM.scrammed = true;
+  SIM.scramTimer = 0;
+  // 所有控制棒(含AZ)以全速插入 - 注意：机械卡死的棒即使SCRAM也无法动作
+  var jammedDuringScram = 0;
+  for (var scr = 0; scr < RODS.length; scr++) {
+    var rod = RODS[scr];
+    if (rod.jammed) { jammedDuringScram++; continue; }
+    rod.targetPos = 100;
+    rod.moving = true;
+  }
+  document.getElementById('scramBanner').classList.add('active');
+  var jamSuffix = jammedDuringScram ? ' ⚠ ' + jammedDuringScram + '根机械卡死未插入!' : '';
+  logMsg('SCRM', '☢ SCRAM 紧急停堆启动！原因: ' + reason + jamSuffix);
+  // 汽轮机联跳
+  if (TURBINE.running || TURBINE.generatorOnline) {
+    setTimeout(function(){ turbineTrip('REACTOR SCRAM LINK'); }, 300/SIM.speed);
+  }
+}
+
+// ============ 自动控制模式 ============
+function changeAutoMode() {
+  AUTO.mode = document.getElementById('autoModeSel').value;
+  AUTO.setpoint = parseFloat(document.getElementById('autoSetpoint').value) || 0;
+  AUTO.integralTerm = 0;
+  var labels = {manual:'手动控制', 'auto-power':'自动功率调节', 'auto-temp':'自动温度稳'};
+  document.getElementById('modeLabel').textContent = labels[AUTO.mode] || '手动';
+  logMsg('INFO', '控制模式切换: ' + AUTO.mode);
+}
+
+// ============ 日志 ============
+function padZ(n){ return (n<10?'0':'') + n; }
+function logMsg(level, text) {
+  var log = document.getElementById('alarmLog');
+  var entry = document.createElement('div');
+  var t = new Date();
+  var hh = padZ(t.getHours());
+  var mm = padZ(t.getMinutes());
+  var ss = padZ(t.getSeconds());
+  entry.className = 'alarm-entry';
+  entry.innerHTML = '<span class="time">' + hh + ':' + mm + ':' + ss + '</span>' +
+                    ' <span class="lvl-' + level + '">' + level + '</span>' +
+                    ' <span>' + text + '</span>';
+  log.prepend(entry);
+  // 最多保留100条
+  while (log.children.length > 100) log.removeChild(log.lastChild);
+}
+
+// ============ 标准启动程序 ============
+function startupSequence() {
+  logMsg('INFO', '▶▶ 标准启动序列开始 (预计2分钟/仿真时间)');
+  SIM.startupPhase = 1;
+  if (SIM.scrammed) {
+    SIM.scrammed = false;
+    document.getElementById('scramBanner').classList.remove('active');
+    logMsg('INFO', '✓ SCRAM已复位');
+  }
+  // Step 1: 启动MCP
+  setTimeout(function() {
+    // 先启2泵
+    startPump('MCP', 0); startPump('MCP', 2);
+    setTimeout(function(){ startPump('MCP', 1); startPump('MCP', 3); }, 2000/SIM.speed);
+    setTimeout(function(){
+      for (var mii=4;mii<8;mii++) startPump('MCP', mii);
+    }, 4000/SIM.speed);
+  }, 1000/SIM.speed);
+  // Step 2: 除氧器投运
+  setTimeout(function() { toggleVent(true); toggleSteam(true); }, 3000/SIM.speed);
+  setTimeout(function() { startPump('FWP', 0); startPump('FWP', 2); }, 6000/SIM.speed);
+  // Step 3: 提棒 接近临界
+  setTimeout(function() {
+    logMsg('INFO', '▶ 开始提升控制棒 趋近临界');
+    // 提手动组 + 平均/LAC 组; AZ保持抽出
+    for (var s3 = 0; s3 < RODS.length; s3++) {
+      var r3 = RODS[s3];
+      if (r3.group === '手动' || r3.group === '平均' || r3.group === 'LAC') {
+        r3.targetPos = 30; r3.moving = true;
+      }
+      if (r3.group === 'AZ') { r3.targetPos = 0; r3.moving = true; } // AZ-5棒保持抽出
+    }
+  }, 12000/SIM.speed);
+  setTimeout(function() {
+    logMsg('INFO', '▶ 继续提各组 逼近临界');
+    for (var s3b = 0; s3b < RODS.length; s3b++) {
+      var r3b = RODS[s3b];
+      if (r3b.group === '手动' || r3b.group === '平均' || r3b.group === 'LAC' || r3b.group === '短棒') {
+        r3b.targetPos = 40; r3b.moving = true;
+      }
+    }
+  }, 22000/SIM.speed);
+  // Step 4: 临界后升功率
+  setTimeout(function() {
+    logMsg('INFO', '▶ 反应堆预计已达临界，升功率至 50% FP');
+    SIM.startupPhase = 3;
+    for (var s4 = 0; s4 < RODS.length; s4++) {
+      var r4 = RODS[s4];
+      if (r4.group !== 'AZ') {
+        r4.targetPos = Math.max(0, r4.position - 15); r4.moving = true;
+      }
+    }
+  }, 40000/SIM.speed);
+}
+
+// ============ 复位 ============
+function resetSim() {
+  SIM.time = 0; SIM.scrammed = false; SIM.scramTimer = 0; SIM.startupPhase = 0;
+  document.getElementById('scramBanner').classList.remove('active');
+  // 复位反应堆
+  REACTOR.thermalPower = 0; REACTOR.neutronFlux = 0;
+  REACTOR.rho = -0.05; REACTOR.rho_fuel = REACTOR.rho_void = REACTOR.rho_xe = REACTOR.rho_coolant = 0;
+  REACTOR.rho_rods = -0.08; REACTOR.Xe135 = 0; REACTOR.I135 = 0;
+  REACTOR.avgFuelTemp = REACTOR.peakFuelTemp = REACTOR.claddingTemp = 20;
+  REACTOR.voidFraction = 0; REACTOR.coreMelted = false; REACTOR.channelDamage = 0;
+  REACTOR.coreInletT = 20; REACTOR.coreOutletT = 20; REACTOR.coreDeltaT = 0;
+  REACTOR.dnbChannels = 0; REACTOR.blockedChannels = 0; REACTOR.maxLocalVoid = 0;
+  REACTOR.steamJamEvents = 0; REACTOR.thermalJamEvents = 0;
+  precursors.fill(0);
+  initChannels();
+  initRods();
+  initPumps();
+  // 复位控制棒选择/卡棒UI状态
+  clearRodSelection();
+  MINI_CORE_INIT = false;
+  window._prevPw = null;
+  window._prevTLog = null;
+  window._prevPwLog = null;
+  // 复位二回路
+  SECONDARY.deaerator = { level:60, pressure:0.12, temperature:104, oxygen_ppb:2000, flowIn:0, flowOut:0, steamHeating:false, ventOpen:false, load:0};
+  for (var sgi = 0; sgi < SECONDARY.sg.length; sgi++) {
+    var s = SECONDARY.sg[sgi];
+    s.level = 50; s.pressure = 0; s.temp = 25; s.flow = 0;
+  }
+  SECONDARY.mainSteam = {pressure:0, temperature:20, flow:0};
+  SECONDARY.condenser = {vacuum:101, backpressure:0.101, level:50, temp:20};
+  // 复位汽轮机
+  TURBINE.running=false; TURBINE.tripped=false; TURBINE.rpm=0; TURBINE.targetRpm=0; TURBINE.generatorOnline=false;
+  TURBINE.genPower=0; TURBINE.genLoadSet=0; TURBINE.vibration=0.1; TURBINE.exhaustTemp=20; TURBINE.bypassValve=0; TURBINE.tripValveOpen=false; TURBINE.govValveOpen=0;
+  document.getElementById('genLoadSlider').value = 0;
+  document.getElementById('loadSet').textContent = 0;
+  AUTO.integralTerm = 0;
+  selectedRodIdx = -1;
+  document.getElementById('rodDetail').style.display = 'none';
+  initUI();
+  logMsg('INFO', '⟲ 仿真复位 - 冷停堆状态');
+}
+
+// ============ 仿真速度 ============
+function setSimSpeed(s) {
+  SIM.speed = s;
+  SIM.running = s > 0;
+  var ids = ['btnPause','btn1x','btn5x','btn20x'];
+  for (var idi = 0; idi < ids.length; idi++) {
+    var el = document.getElementById(ids[idi]); if (el) el.classList.remove('active');
+  }
+  var idMap = {0:'btnPause',1:'btn1x',5:'btn5x',20:'btn20x'};
+  if (idMap[s]) document.getElementById(idMap[s]).classList.add('active');
+}
+
+// ======================================================
+// 核心仿真循环 (每100ms 1 tick = 0.1s * speed)
+// ======================================================
+var lastTick = performance.now();
+function simStep() {
+  var now = performance.now();
+  var dtWall = Math.min(50, now - lastTick);
+  lastTick = now;
+  if (!SIM.running) { requestAnimationFrame(simStep); return; }
+  var dt = (dtWall / 1000) * SIM.speed; // 仿真时间步长(s)
+  SIM.time += dt;
+  SIM.scramTimer += dt;
+
+  // --- 1. 控制棒运动 (0.4m/s典型速度, 整个行程7m 约 17.5s，这里近似8-12秒走完)
+  for (var rodI = 0; rodI < RODS.length; rodI++) {
+    var rod = RODS[rodI];
+    if (rod.jammed) { rod.moving = false; continue; } // 机械卡死：无法动作（SCRAM也无效）
+    if (!rod.moving && Math.abs(rod.position - rod.targetPos) < 0.1) continue;
+    // AZ停堆棒最快 (重力插入)
+    var rate = rod.group === 'AZ' ? 45 : 10; // %/s
+    if (SIM.scrammed) rate = rod.group === 'AZ' ? 80 : 35; // SCRAM时加速插入
+    var diff = rod.targetPos - rod.position;
+    var step = Math.sign(diff) * Math.min(Math.abs(diff), rate * dt);
+    rod.position += step;
+    if (Math.abs(rod.position - rod.targetPos) < 0.1) {
+      rod.position = rod.targetPos; rod.moving = false;
+    }
+  }
+  // 根据棒位置计算 rho_rods (棒抽出越多，正反应性越大)
+  // 初始停堆 rho_rods = -0.08 (-12.3 β)
+  // 满功率时平均抽出 60% -> rho_rods ≈ -0.005 (抵消氙毒等)
+  var avgInserted = 0;
+  var nonAzCount = 0;
+  for (var rodA = 0; rodA < RODS.length; rodA++) {
+    if (RODS[rodA].group !== 'AZ') { avgInserted += RODS[rodA].position; nonAzCount++; }
+  }
+  avgInserted = nonAzCount > 0 ? avgInserted / nonAzCount : 100;
+  // AZ棒: 抽出(0) 无吸收; 插入(100) 加 -0.015 ρ
+  var AZ_contrib = 0;
+  var AZ_sum = 0;
+  var AZ_count = 0;
+  for (var rodAZ = 0; rodAZ < RODS.length; rodAZ++) {
+    if (RODS[rodAZ].group === 'AZ') { AZ_sum += RODS[rodAZ].position; AZ_count++; }
+  }
+  if (AZ_count) AZ_contrib = AZ_sum / AZ_count / 100 * -0.015;
+  REACTOR.rho_rods = -0.004 - (1 - avgInserted/100) * 0.070 + AZ_contrib;
+  // 注：1-avgInserted/100 为抽出比例，抽出越多 负反应性越少 (越正)
+
+  // --- 2. 冷却剂流量 (真实RBMK: 4环路×2泵, 每泵4000 t/h, 总~32000 t/h)
+  var totalMcpFlow = 0;
+  var NOMINAL_FLOW_PER_MCP = 4000;    // t/h 每台主泵
+  var flowRatio = 0;
+  for (var pi = 0; pi < PUMPS_MCP.length; pi++) {
+    var p = PUMPS_MCP[pi];
+    if (p.running && !p.trip) {
+      // 泵惰走/升速惯性 真实异步电机 ~3-5s
+      p.speed += (p.targetSpeed - p.speed) * Math.min(1, dt / 4);
+      // 吸入口空化/气蚀 → 振动突升+流量不稳
+      var npshLow = REACTOR.avgFuelTemp > 270 && p.speed > 90 && flowRatio < 0.35;
+      if (npshLow) p.vibrations = Math.min(1.5, p.vibrations + dt * 0.3);
+      else p.vibrations += (0.18 + (p.speed/100)*0.12 - p.vibrations) * Math.min(1, dt/2);
+    } else {
+      // 惰走 ~15s
+      p.speed += (0 - p.speed) * Math.min(1, dt / 8);
+      if (p.trip && p.speed < 1) p.trip = false;
+    }
+    p.flow = NOMINAL_FLOW_PER_MCP * (p.speed/100) * (p.vibrations < 0.8 ? 1 : (1 - (p.vibrations-0.8)*0.6));
+    p.current  = p.running ? (280 + p.speed*2.2 + (Math.random()-0.5)*8) : 0;
+    // 一回路泵排压 ∝ rpm² , 正常 6.9~7.2 MPa
+    p.dischargePress = p.speed > 10 ? 0.2 + 7.0*(p.speed/100)*(p.speed/100) + (Math.random()*0.05-0.025) : 0;
+    totalMcpFlow += p.flow;
+    // UI
+    var row = document.getElementById('mcpRow' + pi);
+    if (row) {
+      row.classList.toggle('running', p.running && p.speed > 5);
+      row.classList.toggle('trip', p.trip);
+      var sp = document.getElementById('mcpSpd' + pi);
+      if (sp) sp.textContent = p.speed.toFixed(0) + '%';
+    }
+  }
+  var nominalFlow = 32000;               // t/h RBMK-1000一回路额定总流量
+  flowRatio = totalMcpFlow / nominalFlow;
+
+  // --- 3. 点堆动力学 (真实RBMK-1000参数)
+  // RBMK额定3200 MWt, 发电1000 MWe, 效率≈31%
+  var Tref = 265;  // RBMK额定一回路冷段入口温度(运行点)
+  // 多普勒燃料温度系数(负): 实测RBMK约 -0.00012 β/°C 相对265°C
+  REACTOR.rho_fuel = -0.00012 * (REACTOR.avgFuelTemp - Tref);
+  // 慢化剂温度系数(石墨) RBMK实测约 +3e-5 β/°C(略正)
+  REACTOR.rho_coolant = 3e-5 * (REACTOR.avgFuelTemp - 200);
+  // Xe氙: 简化比例改为 3200MW归一; Xe-135全功率饱和ρ≈-0.025β
+  var pRatio = Math.max(0, REACTOR.thermalPower / 3200);
+  var Xe_production = 2.0e-5 * pRatio;
+  var Xe_decay = 2.1e-5 * REACTOR.Xe135;
+  var Xe_burn = 1.5e-4 * REACTOR.Xe135 * (0.05 + pRatio*0.95);
+  REACTOR.Xe135 += (Xe_production - Xe_decay - Xe_burn) * dt;
+  REACTOR.Xe135 = Math.max(0, Math.min(0.03, REACTOR.Xe135));
+  REACTOR.rho_xe = -REACTOR.Xe135;
+  // 正空泡系数: 随燃耗/空泡升高急剧变正. RBMK典型+0.002~0.012 β/%
+  var alphaVoid = 0.0025 + 0.01 * pRatio;  // 低功率+2.5e-3 满功率~+0.0125
+  if (REACTOR.voidFraction > 40) alphaVoid *= 1.6;
+  if (REACTOR.voidFraction > 70) alphaVoid *= 1.3;
+  REACTOR.rho_void = alphaVoid * REACTOR.voidFraction;
+  REACTOR.voidCoeff = alphaVoid * 100; // 显示为每10%空泡的β
+  // 总反应性(β单位)
+  REACTOR.rho = REACTOR.rho_rods + REACTOR.rho_fuel + REACTOR.rho_void + REACTOR.rho_xe + REACTOR.rho_coolant;
+  var beta_unit_rho = REACTOR.rho;
+
+  // 点堆动力学: 指数变化模型 (rho=0→不变; rho>0→增长; rho<0→衰减)
+  // RBMK: 在rho=+0.1β (0.00065) → 周期~30s (缓发控制)
+  //       在rho=+1β   → 瞬发临界 周期<0.1s (爆轰)
+  if (REACTOR.thermalPower < 0.05 && beta_unit_rho < -0.003) {
+    // 深次临界: 稳定在源量程功率
+    REACTOR.thermalPower += (0.0001 - REACTOR.thermalPower) * Math.min(1, dt/10);
+  } else {
+    // 反应堆稳定周期(秒)
+    var T_s;
+    if (beta_unit_rho > 0.999) T_s = 0.02;                              // 瞬发临界以上 - 爆炸
+    else if (beta_unit_rho > 0) T_s = Math.max(0.15, 35 / beta_unit_rho);  // 缓发-瞬发过渡
+    else                    T_s = Math.max(3.0, 100 / (-beta_unit_rho));  // 负周期衰减
+    // 基于当前功率乘指数因子 (更像真实点堆)
+    var k = Math.exp(dt / T_s * Math.sign(beta_unit_rho));
+    REACTOR.thermalPower *= Math.max(0.3, Math.min(3, k));
+    // 微小功率时避免浮点下溢
+    REACTOR.thermalPower = Math.max(1e-7, REACTOR.thermalPower);
+    // 停堆衰变余热: SCRAM后仍有~3-6%功率
+    if (SIM.scrammed && SIM.scramTimer < 3600 && REACTOR.thermalPower < 100) {
+      REACTOR.thermalPower = Math.max(REACTOR.thermalPower, 0.06 * 3200 * Math.exp(-SIM.scramTimer/300));
+    }
+    // 热力上界：燃料不能无限出能量，最终会受熔毁/通道损坏限制
+    if (REACTOR.peakFuelTemp > 1800) REACTOR.thermalPower *= Math.max(0.5, 1 - dt*0.5);
+  }
+  REACTOR.neutronFlux = REACTOR.thermalPower * 0.05;   // 归一化显示
+
+  // --- 4. 热工水力 (真实RBMK数值)
+  // 堆芯总热容 ~1700吨石墨(cp=0.72kJ/kgK) + 185吨UO2+Zr + 冷却剂 ~= 5500 MW·s/°C
+  //  也就是说完全绝热3200MW加热时,升温速率 ~ 0.58°C/s
+  var HEAT_CAP = 5500;
+  // 冷却剂入口温度(冷段): RBMK 额定265°C, 实际随机组负荷/除氧器而变
+  var coldLegT = Math.max(20, 240 + 25 * (REACTOR.thermalPower/3200) + (SECONDARY.deaerator.temperature-104)*0.05);
+  // 可带走热量: Q = mass_flow × cp_eff × (Tcore_hot - Tcore_cold)
+  // 32000 t/h × 4.2 kJ/kg·°C × ΔT°C = 32000/3600 *4200 *ΔT / 1e6 MW ≈ 37.3 * ΔT MW
+  // 但RBMK是沸水堆通道, 还要算汽化潜热. 简化 cp_eff≈1.2 以考虑沸腾
+  var mass_kg_s = totalMcpFlow / 3.6;
+  var cp_eff_kJkg = 4.5 + REACTOR.voidFraction*0.05;
+  // 传热温差 (燃料平均温度减去冷段) + 沸腾增强因子
+  var dT_for_heat = Math.max(0, REACTOR.avgFuelTemp - coldLegT);
+  var removable = mass_kg_s * cp_eff_kJkg * dT_for_heat / 1000; // MW
+  //  流量低时沸腾危机(DNB) → 传热系数暴跌
+  if (flowRatio < 0.3 && dT_for_heat > 50) removable *= 0.4;
+  if (flowRatio < 0.15 && dT_for_heat > 30) removable *= 0.2;
+  //  不能超过"功率×热阻"物理上限(避免数值跳)
+  removable = Math.min(removable, REACTOR.thermalPower + 400);
+  var removed = Math.max(0, removable);
+  // 能量平衡
+  var dTdt = (REACTOR.thermalPower - removed) / HEAT_CAP;
+  REACTOR.avgFuelTemp += dTdt * dt;
+  // 最低温度边界(不低于冷腿)
+  REACTOR.avgFuelTemp = Math.max(coldLegT + 0.5, REACTOR.avgFuelTemp);
+  // 峰温 vs 平均: RBMK热点因子≈1.5, 随局部流量/功率密度波动
+  var hotSpotFactor = 1.38 + 0.18*(REACTOR.thermalPower/3200) + (flowRatio<0.3?0.3:0) + Math.random()*0.02;
+  REACTOR.peakFuelTemp = Math.max(coldLegT+1, REACTOR.avgFuelTemp * hotSpotFactor - coldLegT*(hotSpotFactor-1));
+  REACTOR.coreDeltaT = Math.max(0, REACTOR.avgFuelTemp - coldLegT); // 进出口温升
+
+  // 空泡份额: RBMK 7.0 MPa饱和温≈285.5°C
+  var priPressure = 6.4 + flowRatio*0.65;
+  // 饱和温度近似: p(MPa) → Tsat(°C)  7.0→285.5  6.5→280.5
+  var satTemp = 252 + priPressure * 4.75;
+  // 通道出口温度 vs 饱和: 超温越多空泡越多; 流量越少空泡越多
+  var subCool = satTemp - (REACTOR.avgFuelTemp + REACTOR.coreDeltaT*0.6);
+  var voidTarget;
+  if (subCool > 5) voidTarget = 0; // 足够过冷,无空泡
+  else {
+    voidTarget = Math.max(0, (-subCool) * 2.2) + (REACTOR.thermalPower/3200)*28 - flowRatio*30;
+  }
+  voidTarget = Math.max(0, Math.min(98, voidTarget));
+  // 空泡形成/溃灭有惯性
+  var voidTime = voidTarget > REACTOR.voidFraction ? dt/1.2 : dt/4.5;  // 消散比形成慢
+  REACTOR.voidFraction += (voidTarget - REACTOR.voidFraction) * Math.min(1, voidTime);
+
+  REACTOR.coreInletT  = coldLegT;
+  REACTOR.coreOutletT = coldLegT + REACTOR.coreDeltaT;
+
+  // --- 4.1 分通道真实热工: 1600+真实有效通道(inside=true && FUEL/控制棒类算有效冷却通道, D/O/P/K等探测器通道只参与冷却不参与功率/少给功率)
+  // 把全局的热功率/流量 按 powerDensity 和 环路流量权重分配给各通道
+  {
+    // 每环路有效流量 (按列归属 Loop1列0-11, Loop2列12-23, Loop3列24-35, Loop4列36-46)
+    var loopFlow = [0,0,0,0,0];   // 1-4 索引, 单位: t/h (两泵之和)
+    for (var L = 1; L <= 4; L++) {
+      var lp1 = PUMPS_MCP[(L-1)*2];
+      var lp2 = PUMPS_MCP[(L-1)*2+1];
+      loopFlow[L] = (lp1?lp1.flow:0) + (lp2?lp2.flow:0);
+    }
+    // 每环通道数（用于通道间分流）
+    var loopChCounts = [0,0,0,0,0];
+    for (var lc = 0; lc < CHANNELS.length; lc++) {
+      if (CHANNELS[lc].inside) loopChCounts[CHANNELS[lc].loop]++;
+    }
+    // 总功率权值（只有通道类型=燃料/控制棒类 才承担功率, 探测器不承热）
+    var totalPd = 0;
+    for (var tp = 0; tp < CHANNELS.length; tp++) {
+      var tch = CHANNELS[tp];
+      if (!tch.inside) continue;
+      if (tch.type === CH_TYPE.RAD_DET || tch.type === CH_TYPE.AX_DET ||
+          tch.type === CH_TYPE.LAC_DET || tch.type === CH_TYPE.FISSION) {
+        totalPd += tch.powerDensity * 0.02;     // 探测器通道几乎不发热
+      } else {
+        totalPd += tch.powerDensity;
+      }
+    }
+    var sumOutT = 0, sumFuelT = 0, maxLocVoid = 0, dnbCnt = 0, blkCnt = 0;
+    var peakLocalFuelT = 0, cntInside = 0;
+
+    for (var ci = 0; ci < CHANNELS.length; ci++) {
+      var ch = CHANNELS[ci];
+      if (!ch.inside) continue;
+      cntInside++;
+      var isDetector = (ch.type === CH_TYPE.RAD_DET || ch.type === CH_TYPE.AX_DET ||
+                          ch.type === CH_TYPE.LAC_DET || ch.type === CH_TYPE.FISSION);
+      // 该通道占整体功率的分数
+      var pdEff = ch.powerDensity * (isDetector ? 0.02 : 1);
+      var q = (REACTOR.thermalPower * pdEff) / totalPd; // MW
+      // 该通道入口温度 = coldLegT (每环一致)
+      var LF = loopFlow[ch.loop] || 0;
+      // 流量分数(相对每通道的名义): 阻塞 × 0.05
+      var flowFr = Math.max(0.02, (LF / (loopChCounts[ch.loop]*92)) * ch.flowArea * (ch.blocked ? 0.05 : 1));
+      flowFr = Math.max(0.01, (LF / 8000) * ch.flowArea * (ch.blocked ? 0.05 : 1));
+      ch.flowFrac = flowFr;
+      ch.tempIn = coldLegT;
+      var massFlow = Math.max(0.05, 8888 / cntInside * 1 * flowFr * 25); // kg/s 每通道名义~5-7
+      var cpKJ = 4.5;
+      var dTlocal = (q * 1000) / Math.max(0.1, massFlow * cpKJ); // °C
+      var tOut = ch.tempIn + dTlocal;
+      var tSat = satTemp;
+      var excess = Math.max(0, tOut - tSat);
+      var vFrac = Math.min(99, excess * 3.0 + (q / (3200/cntInside))*22 / Math.max(0.2, flowFr) - 15);
+      vFrac = Math.max(0, vFrac);
+      // DNB: 只有FUEL/控制棒通道(非探测器)可触发
+      if (isDetector) {
+        ch.dnb = false;
+      } else {
+        var nominalPerCh = 3200 / cntInside; // MW/通道 约 1.93MW
+        var heatFlux = q / nominalPerCh;
+        var chf = 1.4 + 2.2 * flowFr - vFrac/48;
+        ch.dnb = heatFlux > chf && excess > 2;
+      }
+      // 蒸汽阻塞: 局空泡>80% AND 流量<25%
+      if (vFrac > 82 && flowFr < 0.22) ch.blocked = true;
+      if (vFrac < 18 && flowFr > 0.6) ch.blocked = false;
+      // 包壳/燃料温度: 探测器→简化，不考虑包壳损伤
+      if (isDetector) {
+        ch.cladT += (coldLegT + dTlocal*0.7 - ch.cladT) * Math.min(1, dt/3);
+        ch.fuelT += (coldLegT + dTlocal - ch.fuelT) * Math.min(1, dt/3);
+      } else {
+        if (ch.dnb) ch.cladT += (Math.min(1300, ch.fuelT + 280 + excess*4) - ch.cladT) * Math.min(1, dt/0.8);
+        else        ch.cladT += (coldLegT + dTlocal * 0.85 + 20 - ch.cladT) * Math.min(1, dt/2.2);
+        var localRemoved = Math.max(0, massFlow * cpKJ * Math.max(1, (tOut - coldLegT))/1000);
+        var dTdtLocal = (q - localRemoved) / (HEAT_CAP / cntInside * 1.0);
+        ch.fuelT += dTdtLocal * dt;
+        ch.fuelT = Math.max(coldLegT + 1, ch.fuelT);
+      }
+      ch.tempOut = Math.min(tSat + excess * 0.5, tOut);
+      ch.voidFrac = vFrac;
+      sumOutT += ch.tempOut;
+      sumFuelT += ch.fuelT;
+      if (vFrac > maxLocVoid) maxLocVoid = vFrac;
+      if (!isDetector && ch.dnb) dnbCnt++;
+      if (ch.blocked) blkCnt++;
+      if (ch.fuelT > peakLocalFuelT) peakLocalFuelT = ch.fuelT;
+      if (!isDetector) {
+        if (ch.cladT > 900) ch.dmg += dt * 0.01 * (ch.cladT - 900)/300;
+        if (ch.blocked)    ch.dmg += dt * 0.005;
+        ch.dmg = Math.min(1, ch.dmg);
+      }
+    }
+    REACTOR.coreOutletT = sumOutT / Math.max(1, cntInside);
+    REACTOR.avgFuelTemp = sumFuelT / Math.max(1, cntInside);
+    REACTOR.peakFuelTemp = Math.max(REACTOR.peakFuelTemp||0, peakLocalFuelT);
+    REACTOR.maxLocalVoid = maxLocVoid;
+    REACTOR.dnbChannels = dnbCnt;
+    REACTOR.blockedChannels = blkCnt;
+    REACTOR.coreDeltaT = Math.max(0, REACTOR.coreOutletT - coldLegT);
+  }
+
+  // --- 4.2 蒸汽卡棒 / 热变形卡棒 (运行时真实通道故障引发)
+  {
+    // 每根棒对应 CHANNELS[rod.chRow, rod.chCol] (47×47 真实坐标)
+    for (var jamI = 0; jamI < RODS.length; jamI++) {
+      var rod = RODS[jamI];
+      if (rod.jammed) continue;
+      var ch = CHANNELS[rod.chRow * CH_GRID + rod.chCol];
+      if (!ch || !ch.inside) continue;
+      var pJamPerSec = 0;
+      var reason = null;
+      // 蒸汽卡棒: 同(r,c)的真实导向管通道若蒸汽堵塞 or 高局空泡 → 水力卡阻
+      if (ch.blocked || ch.voidFrac > 72) {
+        var sev = Math.max(0, (ch.voidFrac - 72)/28) + (ch.blocked?0.6:0);
+        pJamPerSec += 0.004 * sev * (rod.moving ? 3.5 : 1);
+        if (sev > 0.55) reason = 'steam';
+      }
+      // 热变形卡棒: 包壳/燃料超温 → 石墨膨胀挤压控制棒导管
+      if (ch.cladT > 750 || ch.fuelT > 1100) {
+        var sev2 = Math.max(0, (ch.cladT-750)/400, (ch.fuelT-1100)/500);
+        pJamPerSec += 0.006 * sev2;
+        if (sev2 > 0.4) reason = reason || 'thermal';
+      }
+      if (pJamPerSec > 0 && Math.random() < 1 - Math.exp(-pJamPerSec*dt)) {
+        rod.jammed = true;
+        rod.jammedReason = reason || (ch.blocked?'steam':'thermal');
+        rod.moving = false;
+        var cell = document.querySelector('.rod-cell[data-idx="' + jamI + '"]');
+        if (cell) cell.classList.add('jammed');
+        if (rod.jammedReason === 'steam') {
+          REACTOR.steamJamEvents++;
+          logMsg('ALRM', '⚠ ☁ 蒸汽卡棒! 棒#' + rod.id + ' ' + rod.group + ' (堆芯' + rod.chRow + ',' + rod.chCol + ') 局空泡' + ch.voidFrac.toFixed(0) + '%' + (ch.blocked?' 通道堵塞':''));
+        } else {
+          REACTOR.thermalJamEvents++;
+          logMsg('ALRM', '⚠ ♨ 热变形卡棒! 棒#' + rod.id + ' ' + rod.group + ' 燃料T' + ch.fuelT.toFixed(0) + '°C 包壳T' + ch.cladT.toFixed(0) + '°C');
+        }
+        // 小概率(10%)多根邻近棒(同3x3邻域)一起被影响
+        if (Math.random() < 0.1) {
+          for (var jamO = 0; jamO < RODS.length; jamO++) {
+            var other = RODS[jamO];
+            if (other.jammed || jamO === jamI) continue;
+            var dist = Math.max(Math.abs(other.chRow-rod.chRow), Math.abs(other.chCol-rod.chCol));
+            if (dist <= 5 && Math.random() < 0.4) {
+              other.jammed = true;
+              other.jammedReason = rod.jammedReason;
+              other.moving = false;
+              var c2 = document.querySelector('.rod-cell[data-idx="' + jamO + '"]');
+              if (c2) c2.classList.add('jammed');
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 燃料损坏: 峰值>1200°C 包壳破损, >2800°C 燃料熔化
+  if (REACTOR.peakFuelTemp > 1200 && !REACTOR.coreMelted) {
+    REACTOR.channelDamage += dt * 0.1 * (REACTOR.peakFuelTemp - 1200)/1000;
+    if (REACTOR.channelDamage > 10 && Math.random() < dt*0.1) {
+      logMsg('ALRM', '⚠ 部分燃料通道过热破损！锆-水反应开始');
+    }
+  }
+  if (REACTOR.peakFuelTemp > 2800 && !REACTOR.coreMelted) {
+    REACTOR.coreMelted = true;
+    logMsg('SCRM', '☢☢ 堆芯熔化！燃料温度超过UO₂熔点！');
+  }
+
+  // --- 5. 自动控制
+  if (AUTO.mode !== 'manual' && !SIM.scrammed) {
+    AUTO.setpoint = parseFloat(document.getElementById('autoSetpoint').value) || 0;
+    var err = AUTO.setpoint - REACTOR.thermalPower;
+    // PI 控制 驱动所有棒组(非AZ)
+    AUTO.integralTerm += err * dt;
+    AUTO.integralTerm = Math.max(-5000, Math.min(5000, AUTO.integralTerm));
+    var ctrl = err * 0.05 + AUTO.integralTerm * 0.0005; // 目标%移动
+    if (Math.abs(ctrl) > 0.05) {
+      // 移动非AZ棒，C组优先(中心)
+      var moveAmt = Math.max(-5, Math.min(5, ctrl));
+      var targetGroup = AUTO.mode === 'auto-temp' ? 'ALL' : 'C';
+      for (var acI = 0; acI < RODS.length; acI++) {
+        var arod = RODS[acI];
+        if (arod.group === 'AZ') continue;
+        if (targetGroup === 'ALL' || arod.group === targetGroup) {
+          arod.targetPos = Math.max(0, Math.min(100, arod.position - moveAmt));
+          arod.moving = true;
+        }
+      }
+    }
+  }
+
+  // --- 6. 蒸汽发生器 / 二回路 / 给水
+  // 给水泵状态
+  for (var fi = 0; fi < PUMPS_FWP.length; fi++) {
+    var p = PUMPS_FWP[fi];
+    if (p.running && !p.trip) {
+      p.speed += (p.targetSpeed - p.speed) * Math.min(1, dt/3);
+    } else {
+      p.speed += (0 - p.speed) * Math.min(1, dt/2);
+    }
+    p.flow = 800 * (p.speed/100);
+    p.dischargePress = p.speed > 10 ? 8.5 : 0;
+    var row = document.getElementById('fwpRow' + fi);
+    if (row) {
+      row.classList.toggle('running', p.running && p.speed > 5);
+      row.classList.toggle('trip', p.trip);
+      var sp = document.getElementById('fwpSpd' + fi);
+      if (sp) sp.textContent = p.speed.toFixed(0) + '%';
+    }
+  }
+  var totalFWFlow = 0;
+  for (var fws = 0; fws < PUMPS_FWP.length; fws++) totalFWFlow += PUMPS_FWP[fws].flow;
+
+  // 除氧器
+  var da = SECONDARY.deaerator;
+  // 流量平衡
+  // 除氧器: 按二回路总流量 ~5600 t/h (1000MWe工况)
+  var fwDemand = TURBINE.generatorOnline ? 5600*(TURBINE.genLoadSet/100) : (TURBINE.rpm>500?1200:100);
+  da.flowIn  = fwDemand * (0.7 + TURBINE.bypassValve/400);   // 回凝水(含旁路)
+  // 实际进入 = 回凝水 + 补水
+  var condensateIn = Math.min(da.flowIn, totalFWFlow * 0.6 + 800);
+  if (TURBINE.rpm < 10) condensateIn = 0;
+  da.flowOut = Math.min(Math.max(0, condensateIn + (da.level-55)*12), totalFWFlow*1.1);
+  // 液位 (液位过低自动补水模拟)
+  da.level += ((condensateIn - da.flowOut)/80) * dt;
+  da.level = Math.max(0, Math.min(100, da.level));
+  if (da.level < 25) da.level += dt*0.8;  // 自动补水
+  // 除氧器压力/温度: 运行0.6~0.7MPa → 160°C左右
+  if (da.steamHeating) {
+    var targetPress = 0.68;
+    da.pressure += (targetPress - da.pressure) * Math.min(1, dt/50);
+  } else {
+    da.pressure += (0.101 - da.pressure) * Math.min(1, dt/30);
+  }
+  // 饱和水温度: 0.1MPa→100°C, 0.7MPa→165°C
+  da.temperature = 100 + (da.pressure - 0.101) * 108;
+  if (!da.steamHeating) da.temperature += (25 - da.temperature)*Math.min(1, dt/600);
+  // 含氧量 只有加热+排气才能降到<5ppb
+  if (da.ventOpen && da.steamHeating && da.temperature > 103) {
+    da.oxygen_ppb += (5 - da.oxygen_ppb) * Math.min(1, dt/100);
+  } else if (!da.steamHeating) {
+    da.oxygen_ppb += (2000 - da.oxygen_ppb) * Math.min(1, dt/600);
+  }
+
+  // SG蒸汽发生器(4台): 每台传热量=removed/4;  1MW → ~1.75 t/h蒸汽
+  var perSG = removed / 4;
+  for (var sgi = 0; sgi < 4; sgi++) {
+    var sg = SECONDARY.sg[sgi];
+    var steamProd = perSG * 1.75 * (sg.level > 10 ? 1 : sg.level/10);
+    sg.flow = steamProd;
+    var feed = Math.max(0, (totalFWFlow * 0.95) / 4);
+    sg.level += ((feed - steamProd*0.98)/200) * dt;
+    sg.level = Math.max(0, Math.min(100, sg.level));
+    if (sg.level < 15 && TURBINE.rpm > 1000) sg.level += dt * 0.5; // 液位低自动补
+    // SG压力: 额定6.4 MPa, 对应280°C饱和; 随负荷/旁路
+    var targetPress2;
+    if (TURBINE.generatorOnline) targetPress2 = 6.2 + 0.4*(TURBINE.genLoadSet/100);
+    else if (TURBINE.tripValveOpen) targetPress2 = 6.0;
+    else targetPress2 = Math.min(6.9, 0.3 + perSG*0.009);
+    // 旁路泄放 → 压力降
+    if (TURBINE.bypassValve > 0) targetPress2 *= 1 - TURBINE.bypassValve/400;
+    sg.pressure += (targetPress2 - sg.pressure) * Math.min(1, dt/10);
+    sg.temp = 264 + (sg.pressure - 6.0)*11;  // 饱和线
+  }
+
+  // 主蒸汽集管 + 调门/旁路节流泄放
+  var totalSteam = 0;
+  for (var sgs = 0; sgs < SECONDARY.sg.length; sgs++) totalSteam += SECONDARY.sg[sgs].flow;
+  SECONDARY.mainSteam.flow = totalSteam;
+  var avgp = 0, avgt = 0;
+  for (var sga = 0; sga < SECONDARY.sg.length; sga++) { avgp += SECONDARY.sg[sga].pressure; avgt += SECONDARY.sg[sga].temp; }
+  avgp /= SECONDARY.sg.length; avgt /= SECONDARY.sg.length;
+  SECONDARY.mainSteam.pressure += (avgp - SECONDARY.mainSteam.pressure) * Math.min(1, dt/5);
+  SECONDARY.mainSteam.temperature += (avgt - SECONDARY.mainSteam.temperature) * Math.min(1, dt/6);
+  SECONDARY.mainSteam.pressure *= 1 - (TURBINE.govValveOpen/100 + TURBINE.bypassValve/100*0.6) * 0.03;
+  SECONDARY.mainSteam.pressure = Math.max(0.05, SECONDARY.mainSteam.pressure);
+
+  // --- 7. 汽轮机模型 (K-1000-65/3000 1000MW级)
+  // 主蒸汽做功能力: 需要压力>5.8MPa才足够
+  if (TURBINE.tripValveOpen) {
+    var steamAvail = Math.max(0, Math.min(1, (SECONDARY.mainSteam.pressure - 1.0) / 5.0));
+    var governor = TURBINE.govValveOpen / 100;
+    var bypassReduce = 1 - 0.7 * (TURBINE.bypassValve / 100);
+    var steamIn = steamAvail * governor * bypassReduce;
+    var loadTorque = TURBINE.generatorOnline ? (TURBINE.genLoadSet/100) : 0.03;
+    var accel = (steamIn * 1.05 - loadTorque) * 150; // rpm/s
+    TURBINE.rpm += accel * dt;
+    TURBINE.rpm -= TURBINE.rpm * 0.00004 * dt * 3000;  // 风阻/机械损耗
+    if (TURBINE.generatorOnline) TURBINE.rpm += (3000 - TURBINE.rpm) * Math.min(1, dt/0.4);
+    if (TURBINE.rpm > 3300 && !TURBINE.tripped) turbineTrip('超速保护 ' + TURBINE.rpm.toFixed(0) + 'rpm');
+    // 调门闭环
+    if (!TURBINE.generatorOnline && TURBINE.targetRpm > 0) {
+      var rpmErr = TURBINE.targetRpm - TURBINE.rpm;
+      var newGov = 3 + Math.max(0, rpmErr/3000)*35 + (Math.abs(rpmErr)>60?7:0);
+      TURBINE.govValveOpen += (Math.min(42, newGov) - TURBINE.govValveOpen) * Math.min(1, dt/2.5);
+    }
+    if (TURBINE.generatorOnline) {
+      var targetGov = 6 + TURBINE.genLoadSet * 0.88;
+      TURBINE.govValveOpen += (targetGov - TURBINE.govValveOpen) * Math.min(1, dt/5);
+    }
+  } else {
+    TURBINE.rpm += (0 - TURBINE.rpm) * Math.min(1, dt/25);
+    TURBINE.govValveOpen += (0 - TURBINE.govValveOpen) * Math.min(1, dt/1.5);
+  }
+  TURBINE.rpm = Math.max(0, TURBINE.rpm);
+  TURBINE.vibration = 0.12 + (TURBINE.rpm/3000)*0.22
+    + (TURBINE.rpm>2800 && TURBINE.rpm<2920 ? 0.45 : 0)
+    + (Math.random()-0.5)*0.04;
+
+  // 发电机: 额定 1000 MWe (RBMK电厂标称) 效率31.25%
+  if (TURBINE.generatorOnline) {
+    var throttleLimit = Math.min(1, REACTOR.thermalPower/2800, TURBINE.govValveOpen/90);
+    var tgtPower = 1000 * (TURBINE.genLoadSet/100) * throttleLimit;
+    TURBINE.genPower += (tgtPower - TURBINE.genPower) * Math.min(1, dt/8);
+  } else {
+    TURBINE.genPower += (0 - TURBINE.genPower) * Math.min(1, dt/4);
+  }
+
+  // 旁路自动: 压力过高且未并网则开; 并网后允许用户手动控制(不再自动关闭)
+  if (!TURBINE.generatorOnline && SECONDARY.mainSteam.pressure > 6.8 && totalSteam > 500) {
+    TURBINE.bypassValve = Math.min(100, TURBINE.bypassValve + 40*dt);
+  }
+  // 旁路关闭: 手动关时不受并网限制(移除原自动关逻辑)
+
+  // 排汽参数
+  TURBINE.exhaustTemp = 28 + (TURBINE.rpm/3000)*18 + TURBINE.genPower*0.04;
+  var vacTarget = TURBINE.running || TURBINE.rpm > 80 ? 4.5 : 101.0;
+  SECONDARY.condenser.vacuum += (vacTarget - SECONDARY.condenser.vacuum) * Math.min(1, dt/60);
+  SECONDARY.condenser.backpressure = SECONDARY.condenser.vacuum / 1000;
+  SECONDARY.condenser.temp = TURBINE.exhaustTemp * 0.6 + 20;
+
+  // 旁路阀关闭(自动)
+  if (TURBINE.generatorOnline && TURBINE.bypassValve > 0) {
+    TURBINE.bypassValve = Math.max(0, TURBINE.bypassValve - 2*dt);
+  }
+
+  // --- 8. 保护与联锁 ---
+  if (!SIM.scrammed) {
+    // 功率过高保护(满功率120%)
+    if (REACTOR.thermalPower > 3840) scramReactor('POWER TRIP >120% FP');
+    // 压力过高
+    if (priPressure > 8.2) scramReactor('高一回路压力保护 >8.2MPa');
+    // 流量过低(主泵<2台运行)
+    var mcpRunning = 0;
+    for (var mcpf = 0; mcpf < PUMPS_MCP.length; mcpf++) {
+      if (PUMPS_MCP[mcpf].running && PUMPS_MCP[mcpf].speed > 10) mcpRunning++;
+    }
+    if (mcpRunning < 2 && REACTOR.thermalPower > 100) scramReactor('冷却剂流量丧失 <2台MCP');
+    // 峰温过高
+    if (REACTOR.peakFuelTemp > 1350) scramReactor('PEAK TEMP TRIP >1350°C');
+    // 功率量程中子注量率高 (120% FP)
+    if (REACTOR.neutronFlux > 160) scramReactor('NR FLUX HIGH TRIP');
+    // 蒸汽压力超高自动开旁路(无手操时)
+    if (SECONDARY.mainSteam.pressure > 6.95 && TURBINE.govValveOpen < 10 && totalSteam > 400) {
+      TURBINE.bypassValve = Math.min(100, TURBINE.bypassValve + 50*dt);
+    }
+  }
+  // SCRAM后若仍有高功率(正反应性残留情况)
+  if (SIM.scrammed && SIM.scramTimer > 8 && REACTOR.thermalPower > 100) {
+    if (Math.random() < dt*0.4) logMsg('ALRM', 'SCRAM后异常残留功率 ' + REACTOR.thermalPower.toFixed(0) + ' MWt');
+  }
+  // SCRAM 后衰变余热需长期冷却
+  if (SIM.scrammed && SIM.scramTimer > 200 && REACTOR.thermalPower < 10 && !SIM._scramResolved) {
+    logMsg('INFO', '堆芯次临界确认 衰变余热可由RHR带出 允许SCRAM复位');
+    SIM._scramResolved = true;
+  }
+
+  // ================ UI 渲染 ================
+  renderUI();
+  requestAnimationFrame(simStep);
+}
+
+// ============ CPS 中列仪表渲染 ============
+var MINI_CORE_INIT = false;
+function ensureMiniCore() {
+  if (MINI_CORE_INIT) return;
+  var mc = document.getElementById('miniCore');
+  if (!mc) return;
+  mc.innerHTML = '';
+  for (var mr = 0; mr < CH_GRID; mr++) {
+    for (var mc2 = 0; mc2 < CH_GRID; mc2++) {
+      var d = document.createElement('div');
+      d.className = 'mini-cell';
+      d.id = 'mini_' + mr + '_' + mc2;
+      mc.appendChild(d);
+    }
+  }
+  MINI_CORE_INIT = true;
+}
+
+function updateRodGroupGauges() {
+  var groups = ['手动','AZ','平均','LAC','短棒'];
+  var counts = { '手动':0, 'AZ':0, '平均':0, 'LAC':0, '短棒':0 };
+  var sums   = { '手动':0, 'AZ':0, '平均':0, 'LAC':0, '短棒':0 };
+  for (var urg = 0; urg < RODS.length; urg++) {
+    var r = RODS[urg];
+    if (counts[r.group] !== undefined) {
+      counts[r.group]++;
+      sums[r.group] += r.position;
+    }
+  }
+  // group -> DOM id 后缀 (因为 DOM 结构复用了 A/B/C/AZ/Y 的 id 作为 rgXCur/rgXval, 按 data-group 反向映射更可靠)
+  var fillColors = {
+    '手动':'rg-A', 'AZ':'rg-B', '平均':'rg-C', 'LAC':'rg-AZ', '短棒':'rg-Y'
+  };
+  for (var ugi = 0; ugi < groups.length; ugi++) {
+    var g = groups[ugi];
+    var avg = counts[g] > 0 ? sums[g] / counts[g] : 0;
+    var container = document.querySelector('.rg[data-group="' + g + '"]');
+    if (!container) continue;
+    var fill = container.querySelector('.rg-fill');
+    if (fill) {
+      fill.className = 'rg-fill ' + fillColors[g];
+      fill.style.height = avg + '%';
+    }
+    var cur = container.querySelector('.rg-cur');
+    if (cur) cur.style.bottom = avg + '%';
+    var val = container.querySelector('.rg-val');
+    if (val) val.textContent = avg.toFixed(0) + '%';
+  }
+}
+
+function updateNeutronMeters() {
+  var pPR = Math.max(0, Math.min(110, REACTOR.thermalPower / 3200 * 100));
+  // 源量程计数率: 停堆1e2~1e4, 临界1e5~1e7, 满功率1e10
+  var flux = REACTOR.neutronFlux;       // 相对单位: 1.0 = 100%FP 通量
+  var cps = 1e2 * Math.pow(10, flux*8); // 近似对数映射: 0->1e2, 1->1e10
+  var srW = Math.max(0.5, Math.min(100, (Math.log10(cps) - 2) / 8 * 100));
+  var sr = document.getElementById('srBar');
+  if (sr) sr.style.width = srW + '%';
+  var srv = document.getElementById('srVal');
+  if (srv) srv.textContent = cps.toExponential(1);
+
+  // 中间量程: 电流 1e-11 ~ 1e-3 A
+  var amps = 1e-11 * Math.pow(10, flux*8);
+  var irW = Math.max(0.5, Math.min(100, (Math.log10(amps) + 11) / 8 * 100));
+  var ir = document.getElementById('irBar');
+  if (ir) ir.style.width = irW + '%';
+  var irv = document.getElementById('irVal');
+  if (irv) irv.textContent = amps.toExponential(1);
+
+  // 功率量程: 0-110%FP
+  var pr = document.getElementById('prBar');
+  if (pr) pr.style.width = Math.min(100, pPR) + '%';
+  var prv = document.getElementById('prVal');
+  if (prv) prv.textContent = pPR.toFixed(2);
+}
+
+function rhoBarSet(id, val, range) {
+  // val: -range..+range, width: 50% center
+  var el = document.getElementById(id);
+  if (!el) return;
+  var frac = Math.max(-1, Math.min(1, val / range));
+  if (frac >= 0) {
+    el.style.left = '50%';
+    el.style.width = (frac * 50) + '%';
+    el.style.transform = 'none';
+  } else {
+    el.style.left = '50%';
+    el.style.width = (-frac * 50) + '%';
+    el.style.transform = 'translateX(-100%)';
+  }
+  var vel = document.getElementById(id + 'V');
+  if (vel) vel.textContent = (val>0?'+':'') + val.toFixed(3);
+}
+
+function updateCpsBars() {
+  // 总反应性
+  var totEl = document.getElementById('rhoTotal');
+  if (totEl) totEl.textContent = (REACTOR.rho>0?'+':'') + REACTOR.rho.toFixed(4);
+  // 分量 范围 ±0.08 β
+  rhoBarSet('rhoRods', REACTOR.rho_rods, 0.08);
+  rhoBarSet('rhoFuel', REACTOR.rho_fuel || 0, 0.02);
+  rhoBarSet('rhoVoid', REACTOR.rho_void || 0, 0.05);
+  rhoBarSet('rhoCool', REACTOR.rho_cool || 0, 0.02);
+  rhoBarSet('rhoXe',   REACTOR.rho_xe || 0,   0.05);
+}
+
+// ============ UI 渲染 ============
+function renderUI() {
+  // 顶部读数
+  document.getElementById('powerReadout').textContent = REACTOR.thermalPower.toFixed(1);
+
+  // 控制棒颜色: 底色按棒类型(M蓝/Z白/G绿/L青/Y黄); 叠加高度条(position%)作为插入深度
+  var rodCells = document.querySelectorAll('.rod-cell');
+  for (var rci = 0; rci < rodCells.length; rci++) {
+    var cell = rodCells[rci];
+    var i = rci;
+    var rod = RODS[i];
+    if (!rod) continue;
+    cell.classList.toggle('selected', selectedRods.has(i));
+    cell.classList.toggle('jammed', !!rod.jammed);
+    // 类型色强制重置（避免jammed或选中后背景无法回来）
+    var typeClasses = ['type-M','type-Z','type-G','type-L','type-Y'];
+    for (var tci = 0; tci < typeClasses.length; tci++) cell.classList.remove(typeClasses[tci]);
+    cell.classList.add('type-' + (rod.chType || 'M'));
+    // 插入程度高度条(覆盖层)
+    cell.style.setProperty('--rod-inserted-opacity', (rod.position/100).toFixed(2));
+    cell.style.setProperty('--rod-pos', rod.position.toFixed(0) + '%');
+    cell.classList.remove('rod-overlay-p');
+    void cell.offsetWidth;
+    cell.classList.add('rod-overlay-p');
+    cell.style.setProperty('--rod-h', rod.position + '%');
+    cell.title = '#' + rod.id + ' ' + rod.group + ' pos=' + rod.position.toFixed(0) + '%' + (rod.jammed?' ⚠JAM':'');
+  }
+  updateRodDetail();
+
+  // 堆芯状态
+  var coreStatus = document.getElementById('coreStatusTag');
+  if (REACTOR.coreMelted) { coreStatus.textContent = 'MELTDOWN'; coreStatus.style.color='#f00'; }
+  else if (SIM.scrammed) { coreStatus.textContent = 'SCRAM'; coreStatus.style.color='#ff5050'; }
+  else if (REACTOR.thermalPower > 2900) { coreStatus.textContent = 'FULL POWER'; coreStatus.style.color='#0f0'; }
+  else if (REACTOR.thermalPower > 50) { coreStatus.textContent = 'POWER OP'; coreStatus.style.color='#ffb000'; }
+  else if (REACTOR.rho > -0.0005) { coreStatus.textContent = 'CRITICAL'; coreStatus.style.color='#00ffff'; }
+  else { coreStatus.textContent = 'SHUTDOWN'; coreStatus.style.color='#808080'; }
+
+  // 迷你堆芯缩略 47×47 真实圆盘
+  ensureMiniCore();
+  var pRatio = Math.min(1.5, REACTOR.thermalPower / 3200);
+  var avgT = REACTOR.avgFuelTemp;
+  for (var mr = 0; mr < CH_GRID; mr++) {
+    for (var mc2 = 0; mc2 < CH_GRID; mc2++) {
+      var cell = document.getElementById('mini_' + mr + '_' + mc2);
+      if (!cell) continue;
+      var ch = CHANNELS[mr * CH_GRID + mc2];
+      var bg;
+      var cls = 'mini-cell';
+      if (!ch || !ch.inside) {
+        cell.className = cls;
+        cell.style.background = 'transparent';
+        continue;
+      }
+      bg = CH_COLOR[ch.type] || '#555';
+      var T = ch.fuelT;
+      var vF = ch.voidFrac;
+      if (REACTOR.coreMelted) cls += ' x';
+      else if (T > 1400 || ch.dmg > 0.85) cls += ' x';
+      else if (T > 750 || vF > 70 || ch.dnb || ch.blocked) cls += ' h';
+      else if (T > 250 || pRatio > 0.02) cls += ' a';
+      if (SIM.scrammed && T < 300) cls += ' m';
+      cell.className = cls;
+      if (cls === 'mini-cell') {
+        cell.style.background = bg;
+        cell.style.opacity = '1';
+      } else {
+        if (T > 120) {
+          var intensity = Math.min(1, (T - 120) / 1100);
+          cell.style.opacity = (0.55 + 0.45 * intensity).toFixed(2);
+        } else {
+          cell.style.opacity = '1';
+        }
+        if (cls === 'mini-cell m') cell.style.background = '';
+      }
+    }
+  }
+  var ml = document.getElementById('miniCoreLabel');
+  if (ml) ml.textContent = avgT.toFixed(0) + '°C';
+  var ml2 = document.getElementById('miniCoreStat');
+  if (ml2) ml2.textContent = 'DNB' + (REACTOR.dnbChannels||0) + '/堵塞' + (REACTOR.blockedChannels||0);
+
+  // 读数值: 中子通量 (功率量程%FP)
+  var pPR = Math.max(0, Math.min(110, REACTOR.thermalPower / 3200 * 100));
+  var nvEl = document.getElementById('neutronFlux');
+  if (nvEl) nvEl.textContent = pPR.toFixed(2);
+  var rho = REACTOR.rho;
+  var rhoCell = document.getElementById('rhoValue');
+  if (rhoCell) {
+    rhoCell.textContent = (rho > 0 ? '+' : '') + rho.toFixed(4);
+    var rhoPar = rhoCell.closest ? rhoCell.closest('.readout-row') : (rhoCell.parentElement ? rhoCell.parentElement.parentElement : null);
+    if (rhoPar) {
+      rhoPar.classList.toggle('warn', rho > 0.0001 && rho < 0.004);
+      rhoPar.classList.toggle('crit', rho >= 0.004);
+    }
+  }
+  // 反应堆周期 T = dt / dlnP
+  var pw = REACTOR.thermalPower;
+  var prevPw = (window._prevPwLog != null) ? window._prevPwLog : pw;
+  var dtForT = (window._prevTLog != null) ? window._prevTLog : (performance.now()/1000);
+  var nowT = performance.now()/1000;
+  var periodStr = '∞';
+  if (pw > 0.1 && prevPw > 0.1 && Math.abs(pw - prevPw) > 1e-3 && (nowT - dtForT) > 0.01) {
+    var dln = Math.log(pw/prevPw) / Math.max(0.05, (nowT - dtForT));
+    if (Math.abs(dln) > 1e-4) {
+      var T_period = 1 / dln;
+      periodStr = (T_period>0?'+':'') + (Math.abs(T_period)>1000?'∞':T_period.toFixed(1));
+    }
+  }
+  window._prevPwLog = pw; window._prevTLog = nowT;
+  var pEl = document.getElementById('periodVal');
+  if (pEl) pEl.textContent = periodStr;
+
+  // T冷段/T热段
+  var leg = document.getElementById('legTemps');
+  if (leg) leg.textContent = (REACTOR.coreInletT||20).toFixed(0) + '/' + (REACTOR.coreOutletT||20).toFixed(0);
+  // T_avg / T_max
+  var at = document.getElementById('avgTemp');
+  if (at) at.textContent = REACTOR.avgFuelTemp.toFixed(0) + '/' + REACTOR.peakFuelTemp.toFixed(0);
+  // 一回路压力
+  var ppSum = 0;
+  for (var mppi = 0; mppi < PUMPS_MCP.length; mppi++) ppSum += (PUMPS_MCP[mppi].speed/100);
+  var pp = (6.4 + ppSum / 8 * 0.65);
+  setReadout('priPressure', pp.toFixed(2), pp > 7.8, false);
+  // 空泡份额 / α_void
+  var voidv = document.getElementById('voidVal');
+  if (voidv) voidv.textContent = (REACTOR.voidFrac||0).toFixed(1) + '%';
+  setReadout('voidCoeff', (REACTOR.voidCoeff>0?'+':'')+REACTOR.voidCoeff.toFixed(2), false, REACTOR.voidCoeff>0.8);
+  // 局域空泡峰值 + DNB通道数
+  var lv = document.getElementById('localVoidMax');
+  if (lv) lv.textContent = (REACTOR.maxLocalVoid||0).toFixed(0) + '%';
+  var dnb = document.getElementById('dnbStat');
+  if (dnb) dnb.textContent = 'DNB ' + (REACTOR.dnbChannels||0);
+  var blk = document.getElementById('blockStat');
+  if (blk) {
+    blk.textContent = (REACTOR.dnbChannels||0) + ' / ' + (REACTOR.blockedChannels||0);
+    var rEl = blk.closest ? blk.closest('.readout-row') : null;
+    if (rEl) {
+      rEl.classList.toggle('warn', (REACTOR.dnbChannels||0) > 3);
+      rEl.classList.toggle('crit', (REACTOR.blockedChannels||0) > 0 || (REACTOR.dnbChannels||0) > 10);
+    }
+  }
+  // Xe/Sm
+  setReadout('xePoison', (REACTOR.rho_xe||0).toFixed(3), false, Math.abs(REACTOR.rho_xe||0) > 0.02);
+  // 流量
+  var fEl = document.getElementById('flowVal');
+  if (fEl) {
+    var totalSpd = 0;
+    for (var mspi = 0; mspi < PUMPS_MCP.length; mspi++) totalSpd += (PUMPS_MCP[mspi].speed/100);
+    var pct = totalSpd / PUMPS_MCP.length * 100;
+    fEl.textContent = pct.toFixed(0);
+  }
+  // rampRate (%FP/分钟)
+  var ramp = (REACTOR.thermalPower - ((window._prevPw != null) ? window._prevPw : REACTOR.thermalPower)) / 3200 * 100 / Math.max(0.02, Math.min(1, SIM.speed)) * 6;
+  window._prevPw = REACTOR.thermalPower;
+  setReadout('rampRate', (ramp>0?'+':'')+ramp.toFixed(1), Math.abs(ramp)>2, Math.abs(ramp)>5);
+  // 卡棒分类统计 (蒸汽/热/总) + 选中数
+  var jamReason = document.getElementById('jamReasonStat');
+  var jc = document.getElementById('jamCount');
+  var sJam = 0, tJam = 0, mechJam = 0;
+  for (var jri = 0; jri < RODS.length; jri++) {
+    var rj = RODS[jri];
+    if (!rj.jammed) continue;
+    if (rj.jammedReason === 'steam') sJam++;
+    else if (rj.jammedReason === 'thermal') tJam++;
+    else mechJam++;
+  }
+  if (jamReason) jamReason.textContent = sJam + ' / ' + tJam + (mechJam ? ' (+' + mechJam + ')' : '');
+  if (jc) jc.textContent = (sJam+tJam+mechJam) + '根 / ' + selectedRods.size + '选中';
+
+  // CPS 仪表
+  updateCpsBars();
+  updateNeutronMeters();
+  updateRodGroupGauges();
+
+  // 除氧器
+  document.getElementById('dearLevel').style.height = SECONDARY.deaerator.level + '%';
+  document.getElementById('dearPress').textContent = SECONDARY.deaerator.pressure.toFixed(2);
+  document.getElementById('dearTemp').textContent = SECONDARY.deaerator.temperature.toFixed(0);
+  document.getElementById('dearO2').textContent = SECONDARY.deaerator.oxygen_ppb.toFixed(1);
+  document.getElementById('dearFlow').textContent = (SECONDARY.deaerator.flowOut).toFixed(0);
+  document.getElementById('dearStatus').textContent =
+    SECONDARY.deaerator.ventOpen && SECONDARY.deaerator.steamHeating ? '运行中' :
+    SECONDARY.deaerator.steamHeating ? '加热中' : '待机';
+
+  // SG状态
+  for (var sgi2 = 0; sgi2 < 4; sgi2++) {
+    var el = document.getElementById('sg' + (sgi2+1) + 'stat');
+    if (!el) continue;
+    var sg2 = SECONDARY.sg[sgi2];
+    el.textContent = sg2.pressure > 5 ? (sg2.flow.toFixed(0)+'t/h') : (sg2.pressure > 1 ? '暖机' : '冷');
+  }
+
+  // 汽轮机各级动画
+  var hpOn = document.getElementById('turbHp');
+  var lp1 = document.getElementById('turbLp1');
+  var lp2 = document.getElementById('turbLp2');
+  var genEl = document.getElementById('genIcon');
+  var tStageOn = TURBINE.rpm > 300;
+  var turbAnimArr = [hpOn, lp1, lp2, genEl];
+  for (var tai = 0; tai < turbAnimArr.length; tai++) {
+    if (!turbAnimArr[tai]) continue;
+    turbAnimArr[tai].classList.toggle('running', tStageOn);
+  }
+  var turbTripArr = [hpOn, lp1, lp2];
+  for (var tti = 0; tti < turbTripArr.length; tti++) {
+    if (!turbTripArr[tti]) continue;
+    if (TURBINE.tripped) turbTripArr[tti].style.borderColor = '#800';
+    else turbTripArr[tti].style.borderColor = '';
+  }
+
+  // 状态标签
+  var gs = document.getElementById('genStatus');
+  if (TURBINE.tripped) { gs.textContent='TRIPPED'; gs.style.color='#ff3030'; }
+  else if (TURBINE.generatorOnline) { gs.textContent='ONLINE'; gs.style.color='#30ff60'; }
+  else if (TURBINE.running) { gs.textContent='ROLLING'; gs.style.color='#ffb000'; }
+  else { gs.textContent='SHUTDOWN'; gs.style.color='#606060'; }
+
+  // 参数
+  setStat('turbRpm', TURBINE.rpm.toFixed(0), TURBINE.rpm>3200, TURBINE.rpm>2900 && TURBINE.rpm<3100 ? false : TURBINE.rpm>500);
+  setStat('genPower', TURBINE.genPower.toFixed(0), TURBINE.genPower>525, false);
+  setStat('msPress', SECONDARY.mainSteam.pressure.toFixed(2), SECONDARY.mainSteam.pressure>7.0, false);
+  setStat('msTemp', SECONDARY.mainSteam.temperature.toFixed(0), SECONDARY.mainSteam.temperature>295, false);
+  setStat('exhPress', SECONDARY.condenser.backpressure.toFixed(3), SECONDARY.condenser.backpressure>0.015, false);
+  setStat('condVac', (101-SECONDARY.condenser.vacuum).toFixed(1), (101-SECONDARY.condenser.vacuum)<90, false);
+
+  // SVG 流程图标签更新
+  var svgPw = document.getElementById('svgPower');
+  if (svgPw) svgPw.textContent = REACTOR.thermalPower.toFixed(0) + ' MWt';
+  var svgGen = document.getElementById('svgGenPower');
+  if (svgGen) svgGen.textContent = TURBINE.genPower.toFixed(0) + ' MWe';
+}
+
+function setReadout(id, val, crit, warn) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var par = el.parentElement.parentElement;
+  el.textContent = val;
+  par.classList.toggle('crit', !!crit);
+  par.classList.toggle('warn', !!warn && !crit);
+}
+function setStat(id, val, crit, warn) {
+  var labelEl = document.querySelector('#' + id + ' + small, #' + id);
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = val;
+  var wrap = el.closest ? el.closest('.tstat') : null;
+  if (!wrap) return;
+  wrap.classList.toggle('crit', !!crit);
+  wrap.classList.toggle('warn', !!warn && !crit);
+}
+
+// ============== 启动 ==============
+initChannels();
+initRods();
+initPumps();
+initUI();
+resetSim();
+logMsg('INFO', 'RBMK-1000 反应堆模拟器已就绪');
+logMsg('INFO', '操作提示：点击单根棒选中；Ctrl+点多选；Shift+点区间选；拉动拉杆改变棒位');
+requestAnimationFrame(function() { lastTick = performance.now(); simStep(); });
+</script>
+</body>
+</html>
