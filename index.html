@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>暗物质反应堆模拟器 · RBMK-1000 × 4</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
@@ -391,7 +394,7 @@ input[type=range].lever::-moz-range-thumb {
 
 /* === Meltdown overlay === */
 body.meltdown {
-  animation: meltScreen 0.5s infinite;
+  animation: meltScreen 0.5s infinite, meltdownShake 0.12s infinite;
 }
 @keyframes meltScreen {
   0%,100% { box-shadow: inset 0 0 200px rgba(124,0,255,0.6); }
@@ -412,6 +415,13 @@ body.meltdown::after {
   50% { opacity: 0.8; transform: translate(-50%,-50%) scale(1.05); }
 }
 
+/* === Meltdown fire canvas overlay === */
+#fire-overlay {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none; z-index: 9998;
+}
+
 /* === Meltdown overlay for explosion === */
 #explosion-overlay {
   position: fixed; top: 0; left: 0;
@@ -419,6 +429,12 @@ body.meltdown::after {
   background: white; z-index: 999999;
   opacity: 0; transition: opacity 0.05s;
   pointer-events: none;
+}
+#blackhole-canvas {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none; z-index: 999998;
+  display: none;
 }
 @keyframes meltdownShake {
   0%, 100% { transform: translate(0,0); }
@@ -437,11 +453,8 @@ body.meltdown::after {
   50% { box-shadow: 0 0 60px 25px rgba(255,80,0,0.9), inset 0 0 80px rgba(255,150,0,0.8); }
 }
 body.meltdown #dmPanel {
-  animation: meltdownShake 0.15s infinite, meltdownGlow 0.5s infinite;
+  animation: meltdownGlow 0.5s infinite;
   border-color: #ff3300;
-}
-body.meltdown #dmBall {
-  animation: meltdownShake 0.12s infinite;
 }
 body.meltdown .card {
   transition: border-color 0.3s;
@@ -659,8 +672,8 @@ body.meltdown .card:not(#dmCard) {
         <div class="stat"><div class="label">中子注入 Σn</div><div class="value cyan" id="dmN">0.00</div></div>
         <div class="stat"><div class="label">湮灭效率 %</div><div class="value green" id="dmEta">0</div></div>
         <div class="stat"><div class="label">核心温度 °C</div><div class="value" id="dmT">20</div></div>
-        <div class="stat"><div class="label">等离子体 ρ</div><div class="value blue" id="dmRho">0.00</div></div>
-        <div class="stat"><div class="label">净输出 MWe</div><div class="value green" id="dmGen">0</div></div>
+        <div class="stat"><div class="label">冷却 MW</div><div class="value blue" id="dmCool">0</div></div>
+        <div class="stat"><div class="label">净热 MW</div><div class="value" id="dmNet">0</div></div>
       </div>
 
       <!-- DM Controls -->
@@ -674,18 +687,28 @@ body.meltdown .card:not(#dmCard) {
         <label>目标:</label>
         <input type="number" id="dmTargetPw" value="8000" min="0" max="16000" step="200">
         <span style="font-size:10px;color:var(--text-muted);">MWt</span>
-        <button class="btn btn-danger" onclick="emergencyDmShutdown()" style="margin-left:auto;">切断中子注入</button>
       </div>
 
       <!-- DM Pumps -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:4px 0;">
         <div>
           <div style="font-size:9px;color:var(--text-secondary);margin-bottom:2px;">暗物质冷却泵 DMC ×6</div>
-          <div id="dmPumpList"></div>
+          <div id="dmPumpList">
+            <div class="pump-row"><span class="name">DMC-1</span><button class="pump-btn off" onclick="toggleDmPump('DMC',0)">■</button><span class="speed" id="dmc0speed">0%</span></div>
+            <div class="pump-row"><span class="name">DMC-2</span><button class="pump-btn off" onclick="toggleDmPump('DMC',1)">■</button><span class="speed" id="dmc1speed">0%</span></div>
+            <div class="pump-row"><span class="name">DMC-3</span><button class="pump-btn off" onclick="toggleDmPump('DMC',2)">■</button><span class="speed" id="dmc2speed">0%</span></div>
+            <div class="pump-row"><span class="name">DMC-4</span><button class="pump-btn off" onclick="toggleDmPump('DMC',3)">■</button><span class="speed" id="dmc3speed">0%</span></div>
+            <div class="pump-row"><span class="name">DMC-5</span><button class="pump-btn off" onclick="toggleDmPump('DMC',4)">■</button><span class="speed" id="dmc4speed">0%</span></div>
+            <div class="pump-row"><span class="name">DMC-6</span><button class="pump-btn off" onclick="toggleDmPump('DMC',5)">■</button><span class="speed" id="dmc5speed">0%</span></div>
+          </div>
         </div>
         <div>
           <div style="font-size:9px;color:var(--text-secondary);margin-bottom:2px;">给水泵 DFW ×3</div>
-          <div id="dmFwpList"></div>
+          <div id="dmFwpList">
+            <div class="pump-row"><span class="name">DFW-1</span><button class="pump-btn off" onclick="toggleDmPump('DFW',0)">■</button><span class="speed" id="dfw0speed">0%</span></div>
+            <div class="pump-row"><span class="name">DFW-2</span><button class="pump-btn off" onclick="toggleDmPump('DFW',1)">■</button><span class="speed" id="dfw1speed">0%</span></div>
+            <div class="pump-row"><span class="name">DFW-3</span><button class="pump-btn off" onclick="toggleDmPump('DFW',2)">■</button><span class="speed" id="dfw2speed">0%</span></div>
+          </div>
         </div>
       </div>
 
@@ -769,39 +792,207 @@ var SOUND = {
 SOUND.load('scram_alert', 'sounds/scram_alert.ogg');
 SOUND.load('alarm', 'sounds/alarm.wav');
 SOUND.load('shutdown', 'sounds/shutdown.mp3');
-SOUND.load('meltdown', 'sounds/meltdown.ogg');
+SOUND.load('meltdown', 'sounds/meltdown.mp3');
 SOUND.load('explosion', 'sounds/explosion.ogg');
 SOUND.load('collision', 'sounds/collision.ogg');
 SOUND.load('machine_loop', 'sounds/machine_loop.ogg');
 SOUND.load('power_off', 'sounds/power_off.ogg');
 SOUND.load('resonance', 'sounds/resonance.ogg');
 SOUND.load('startup_sfx', 'sounds/startup.mp3');
+SOUND.load('intro', 'sounds/intro.ogg');
 
-// === 爆炸特效 ===
+// === 融毁着火特效（Canvas粒子火焰） ===
+var _fire = { particles: [], canvas: null, ctx: null, running: false, frameId: null };
+function _initFireCanvas() {
+  if (_fire.canvas) return;
+  _fire.canvas = document.createElement('canvas');
+  _fire.canvas.id = 'fire-overlay';
+  document.body.appendChild(_fire.canvas);
+  _fire.ctx = _fire.canvas.getContext('2d');
+  _fire.canvas.width = window.innerWidth;
+  _fire.canvas.height = window.innerHeight;
+  window.addEventListener('resize', function() {
+    _fire.canvas.width = window.innerWidth;
+    _fire.canvas.height = window.innerHeight;
+  });
+}
+function _fireParticle() {
+  var w = window.innerWidth, h = window.innerHeight;
+  return {
+    x: Math.random() * w, y: h - 20 - Math.random() * h * 0.15,
+    vx: (Math.random() - 0.5) * 1.5, vy: -(1.5 + Math.random() * 3),
+    size: 4 + Math.random() * 12, life: 1,
+    decay: 0.003 + Math.random() * 0.012,
+    hue: 15 + Math.random() * 30, sat: 100, lit: 35 + Math.random() * 35,
+  };
+}
+function _updateFire() {
+  if (!_fire.running || !_fire.ctx) return;
+  var w = window.innerWidth, h = window.innerHeight;
+  _fire.ctx.clearRect(0, 0, w, h);
+  for (var i = _fire.particles.length - 1; i >= 0; i--) {
+    var p = _fire.particles[i];
+    p.x += p.vx + (Math.random() - 0.5) * 0.5;
+    p.y += p.vy; p.vy -= 0.015;
+    p.life -= p.decay; p.size *= 0.997;
+    if (p.life <= 0 || p.y < -30) { _fire.particles[i] = _fireParticle(); continue; }
+    _fire.ctx.beginPath();
+    var g = _fire.ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+    g.addColorStop(0, 'hsla(' + p.hue + ',' + p.sat + '%,' + Math.min(98, p.lit + 25) + '%,' + p.life + ')');
+    g.addColorStop(0.4, 'hsla(' + (p.hue - 8) + ',' + p.sat + '%,' + p.lit + '%,' + p.life * 0.7 + ')');
+    g.addColorStop(1, 'hsla(' + (p.hue - 20) + ',' + p.sat + '%,' + (p.lit - 25) + '%,0)');
+    _fire.ctx.fillStyle = g;
+    _fire.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    _fire.ctx.fill();
+  }
+  // 烟雾粒子
+  if (Math.random() < 0.3) {
+    _fire.particles.push({
+      x: Math.random() * w, y: h - 10,
+      vx: (Math.random() - 0.5) * 0.8, vy: -(0.3 + Math.random() * 0.5),
+      size: 15 + Math.random() * 25, life: 1,
+      decay: 0.002 + Math.random() * 0.005,
+      hue: 0, sat: 0, lit: 25 + Math.random() * 15,
+    });
+  }
+  _fire.frameId = requestAnimationFrame(_updateFire);
+}
+function startMeltdownFire() {
+  if (_fire.running) return;
+  _fire.running = true;
+  _initFireCanvas();
+  _fire.canvas.style.display = 'block';
+  _fire.particles = [];
+  for (var i = 0; i < 100; i++) _fire.particles.push(_fireParticle());
+  _updateFire();
+}
+function stopMeltdownFire() {
+  _fire.running = false;
+  if (_fire.frameId) { cancelAnimationFrame(_fire.frameId); _fire.frameId = null; }
+  _fire.particles = [];
+  if (_fire.canvas) { _fire.ctx && _fire.ctx.clearRect(0, 0, _fire.canvas.width, _fire.canvas.height); _fire.canvas.style.display = 'none'; }
+}
+
+// === 爆炸特效（含黑洞） ===
 var explosionOverlay = null;
+var _bh = { canvas: null, ctx: null, frameId: null, time: 0, running: false };
+function _initBlackHoleCanvas() {
+  if (_bh.canvas) return;
+  _bh.canvas = document.createElement('canvas');
+  _bh.canvas.id = 'blackhole-canvas';
+  document.body.appendChild(_bh.canvas);
+  _bh.ctx = _bh.canvas.getContext('2d');
+  _bh.canvas.width = window.innerWidth;
+  _bh.canvas.height = window.innerHeight;
+}
+function _drawBlackHole(t) {
+  var w = _bh.canvas.width, h = _bh.canvas.height;
+  var cx = w / 2, cy = h / 2;
+  var maxR = Math.sqrt(cx * cx + cy * cy);
+  var ctx = _bh.ctx;
+  ctx.clearRect(0, 0, w, h);
+  // 黑洞半径随时间增长
+  var bhRadius = 20 + t * 80;
+  var eventHorizonR = Math.min(maxR * 0.35, bhRadius);
+  // 吸积盘 — 旋转螺旋
+  for (var ring = 0; ring < 6; ring++) {
+    var rBase = eventHorizonR * (1.5 + ring * 0.6);
+    var rotOff = ring * 0.8 + t * 2;
+    var alpha = Math.max(0, 0.3 - ring * 0.04);
+    ctx.beginPath();
+    for (var a = 0; a < Math.PI * 2; a += 0.05) {
+      var spiralR = rBase + Math.sin(a * 3 + rotOff) * rBase * 0.15;
+      var x = cx + Math.cos(a) * spiralR;
+      var y = cy + Math.sin(a) * spiralR;
+      if (a === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    var hue = 20 + ring * 15;
+    ctx.fillStyle = 'hsla(' + hue + ', 100%, ' + (50 - ring * 5) + '%, ' + alpha + ')';
+    ctx.fill();
+  }
+  // 引力透镜 — 扭曲环
+  for (var l = 0; l < 3; l++) {
+    var lr = eventHorizonR * (1.2 + l * 0.5);
+    ctx.beginPath();
+    ctx.arc(cx, cy, lr, 0, Math.PI * 2);
+    ctx.strokeStyle = 'hsla(240, 80%, ' + (70 - l * 15) + '%, ' + (0.15 - l * 0.04) + ')';
+    ctx.lineWidth = 2 + l * 1.5;
+    ctx.stroke();
+  }
+  // 事件视界 — 纯黑中心
+  var grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, eventHorizonR);
+  grad.addColorStop(0, '#000');
+  grad.addColorStop(0.6, '#000');
+  grad.addColorStop(0.85, '#1a0a2e');
+  grad.addColorStop(1, 'rgba(30,0,60,0.6)');
+  ctx.beginPath();
+  ctx.arc(cx, cy, eventHorizonR, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+  // 霍金辐射 — 中心微光
+  var glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, eventHorizonR * 0.3);
+  glow.addColorStop(0, 'rgba(200,180,255,0.08)');
+  glow.addColorStop(1, 'rgba(200,180,255,0)');
+  ctx.beginPath();
+  ctx.arc(cx, cy, eventHorizonR * 0.3, 0, Math.PI * 2);
+  ctx.fillStyle = glow;
+  ctx.fill();
+  // 被吸入粒子
+  for (var p = 0; p < 40; p++) {
+    var angle = (p / 40) * Math.PI * 2 + t * 0.5;
+    var dist = eventHorizonR * (1.2 + Math.sin(p * 1.7 + t * 2) * 0.3);
+    var px = cx + Math.cos(angle) * dist;
+    var py = cy + Math.sin(angle) * dist;
+    ctx.beginPath();
+    ctx.arc(px, py, 1 + Math.sin(p + t * 3) * 0.5, 0, Math.PI * 2);
+    ctx.fillStyle = 'hsla(' + (40 + p * 2) + ', 100%, 70%, ' + (0.6 - dist / maxR * 0.5) + ')';
+    ctx.fill();
+  }
+}
+function _animateBlackHole() {
+  if (!_bh.running) return;
+  _bh.time += 0.016;
+  _drawBlackHole(_bh.time);
+  _bh.frameId = requestAnimationFrame(_animateBlackHole);
+}
 function triggerExplosionFlash() {
-  // 屏幕震动
-  document.body.style.animation = 'meltdownShake 0.05s infinite';
-  // 爆炸遮罩：先白闪，再渐变为橙红
+  // 极剧烈震动
+  document.body.style.animation = 'meltdownShake 0.04s infinite';
+  // 爆炸遮罩
   if (!explosionOverlay) {
     explosionOverlay = document.createElement('div');
     explosionOverlay.id = 'explosion-overlay';
     document.body.appendChild(explosionOverlay);
   }
   explosionOverlay.style.opacity = '1';
-  explosionOverlay.style.background = 'radial-gradient(circle, rgba(255,255,200,0.9), rgba(255,150,50,0.8), rgba(200,50,0,0.7))';
+  explosionOverlay.style.background = 'radial-gradient(circle, rgba(255,255,200,0.95), rgba(255,150,50,0.85), rgba(200,50,0,0.7))';
   explosionOverlay.style.transition = 'opacity 0.5s';
-  // 0.5秒后变为橙红保持
+  // 0.5秒后：白闪消退，黑洞登场
   setTimeout(function() {
     explosionOverlay.style.background = '#ff4400';
-    explosionOverlay.style.opacity = '0.8';
+    explosionOverlay.style.opacity = '0.7';
+    // 启动黑洞Canvas
+    _initBlackHoleCanvas();
+    _bh.canvas.style.display = 'block';
+    _bh.time = 0;
+    _bh.running = true;
+    _animateBlackHole();
   }, 500);
-  // 2秒后变白闪
+  // 1.5秒后：黑洞吞噬一切，遮罩渐黑
   setTimeout(function() {
-    explosionOverlay.style.background = '#fff';
+    explosionOverlay.style.background = '#000';
+    explosionOverlay.style.opacity = '0.6';
+  }, 1500);
+  // 2.5秒后：全黑
+  setTimeout(function() {
+    _bh.running = false;
+    if (_bh.frameId) { cancelAnimationFrame(_bh.frameId); _bh.frameId = null; }
+    if (_bh.canvas) _bh.canvas.style.display = 'none';
+    explosionOverlay.style.background = '#000';
     explosionOverlay.style.opacity = '1';
   }, 2500);
-  // 爆炸后3秒刷新页面
+  // 3秒后刷新页面
   setTimeout(function() { location.reload(); }, 3000);
 }
 
@@ -862,7 +1053,7 @@ var DM = {
   thermalPower: 0, coreTemp: 20, plasmaDensity: 0,
   annihilationEta: 0, totalNeutronInput: 0, neutronByUnit: [0,0,0,0],
   shutdown: false, _aboveTh: false, _masterMode: 'independent', _dmInt: 0,
-  CONV: 1/800, NEUTRON_THRESHOLD: 0.8,
+  CONV: 1, NEUTRON_THRESHOLD: 50,
   sg_pressure: 0, sg_temp: 20,
   mainSteam: { pressure: 0, temp: 20 },
   DMC: [], DFW: [],
@@ -885,6 +1076,7 @@ var DM = {
 function initAllUI() {
   for (var ui = 0; ui < 4; ui++) initUnitUI(ui);
   renderDmPumps();
+  logMsg('INFO', '界面已初始化，泵控制已加载');
 }
 
 function initUnitUI(ui) {
@@ -908,30 +1100,32 @@ function initUnitUI(ui) {
 }
 
 function renderDmPumps() {
-  var html = '';
-  for (var i = 0; i < DM.DMC.length; i++) {
-    var p = DM.DMC[i];
-    var on = p.running && !p.trip;
-    var cls = 'speed' + (on && p.speed > 5 ? ' running' : '');
-    html += '<div class="pump-row">' +
-      '<span class="name">' + p.id + '</span>' +
-      '<button class="pump-btn ' + (on ? 'on' : 'off') + '" onclick="toggleDmPump(\'DMC\',' + i + ')">' + (on ? '▶' : '■') + '</button>' +
-      '<span class="' + cls + '">' + sf(p.speed,0) + '%</span>' +
-    '</div>';
-  }
-  document.getElementById('dmPumpList').innerHTML = html;
-  var html2 = '';
-  for (var j = 0; j < DM.DFW.length; j++) {
-    var p2 = DM.DFW[j];
-    var on2 = p2.running && !p2.trip;
-    var cls2 = 'speed' + (on2 && p2.speed > 5 ? ' running' : '');
-    html2 += '<div class="pump-row">' +
-      '<span class="name">' + p2.id + '</span>' +
-      '<button class="pump-btn ' + (on2 ? 'on' : 'off') + '" onclick="toggleDmPump(\'DFW\',' + j + ')">' + (on2 ? '▶' : '■') + '</button>' +
-      '<span class="' + cls2 + '">' + sf(p2.speed,0) + '%</span>' +
-    '</div>';
-  }
-  document.getElementById('dmFwpList').innerHTML = html2;
+  try {
+    // Update DMC pump buttons
+    for (var i = 0; i < DM.DMC.length; i++) {
+      var p = DM.DMC[i];
+      var on = p.running && !p.trip;
+      var btn = document.querySelector('#dmPumpList .pump-row:nth-child(' + (i+1) + ') .pump-btn');
+      if (btn) {
+        btn.className = 'pump-btn ' + (on ? 'on' : 'off');
+        btn.textContent = on ? '▶' : '■';
+      }
+      var spd = document.getElementById('dmc' + i + 'speed');
+      if (spd) spd.textContent = sf(p.speed,0) + '%';
+    }
+    // Update DFW pump buttons
+    for (var j = 0; j < DM.DFW.length; j++) {
+      var p2 = DM.DFW[j];
+      var on2 = p2.running && !p2.trip;
+      var btn2 = document.querySelector('#dmFwpList .pump-row:nth-child(' + (j+1) + ') .pump-btn');
+      if (btn2) {
+        btn2.className = 'pump-btn ' + (on2 ? 'on' : 'off');
+        btn2.textContent = on2 ? '▶' : '■';
+      }
+      var spd2 = document.getElementById('dfw' + j + 'speed');
+      if (spd2) spd2.textContent = sf(p2.speed,0) + '%';
+    }
+  } catch(e) { logMsg('ERR', 'renderDmPumps: ' + e.message); }
 }
 
 function toggleDmPump(kind, idx) {
@@ -943,6 +1137,7 @@ function toggleDmPump(kind, idx) {
     p.running = true; p.trip = false; p.targetSpeed = 100;
   }
   renderDmPumps();
+  logMsg('PUMP', p.id + ' ' + (p.running ? '▶启动' : '■停止') + ' (目标转速 ' + p.targetSpeed + '%)');
 }
 
 // === 控制棒交互 ===
@@ -985,6 +1180,7 @@ function updateUnitLeverDisplay(ui) {
 }
 
 function onUnitLever(ui, v, finalFlag) {
+  if (DM._meltdownActive) return;
   var u = RBMK_UNITS[ui];
   if (u.scrammed) return;
   var target = parseFloat(v);
@@ -1005,6 +1201,7 @@ function onUnitLever(ui, v, finalFlag) {
 }
 
 function groupAllRods(ui, pct, az5) {
+  if (DM._meltdownActive) return;
   var u = RBMK_UNITS[ui];
   if (az5 || pct < 0) {
     if (!u.REACTOR.coreMelted && u.REACTOR.thermalPower <= 2560) {
@@ -1097,17 +1294,6 @@ function checkAndGlobalScram() {
   }
 }
 
-function emergencyDmShutdown() {
-  if (!DM.shutdown) {
-    DM.shutdown = true;
-    logMsg('ALRM', '☢ 暗物质紧急停堆 · 中子注入已切断');
-    SOUND.play('shutdown');
-    SOUND.play('power_off');
-    SOUND.stop('machine_loop');
-  }
-  if (DM.TURBINE.running && !DM.TURBINE.tripped) dmTurbineTrip('DM SHUTDOWN');
-}
-
 // === DM 汽轮机 ===
 function dmTurbineRollUp() {
   if (DM.TURBINE.tripped) { logMsg('WARN', '汽轮机脱扣状态'); return; }
@@ -1118,6 +1304,7 @@ function dmTurbineRollUp() {
   logMsg('DM', '汽轮机冲转开始 目标3000rpm');
 }
 function dmTurbineSync() {
+  if (DM._meltdownActive) return;
   if (DM.TURBINE.rpm < 2980 || DM.TURBINE.rpm > 3020) { logMsg('WARN', '转速不在同步范围 2980-3020'); return; }
   if (DM.TURBINE.generatorOnline) return;
   DM.TURBINE.generatorOnline = true;
@@ -1152,6 +1339,7 @@ function dmTurbineTrip(reason) {
 
 // === 模式切换 ===
 function changeUnitMode(ui) {
+  if (DM._meltdownActive) return;
   var sel = document.getElementById('u' + ui + 'mode');
   var inp = document.getElementById('u' + ui + 'setp');
   var v = sel ? sel.value : 'manual';
@@ -1165,6 +1353,7 @@ function changeUnitMode(ui) {
   logMsg('INFO', RBMK_UNITS[ui].name + ' 模式切换: ' + m);
 }
 function changeDmMasterMode() {
+  if (DM._meltdownActive) return;
   var sel = document.getElementById('dmMasterMode');
   var inp = document.getElementById('dmTargetPw');
   var v = sel ? sel.value : 'independent';
@@ -1177,11 +1366,13 @@ function changeDmMasterMode() {
 }
 
 // === 仿真核心 ===
+var _introPlayed = false;
 function simStep() {
   var now = performance.now();
   var dtWall = Math.min(50, now - lastTick);
   lastTick = now;
   if (!SIM.running) { requestAnimationFrame(simStep); return; }
+  if (!_introPlayed) { SOUND.play('intro'); _introPlayed = true; }
   var dt = (dtWall / 1000) * SIM.speed;
   SIM.time += dt;
 
@@ -1195,55 +1386,33 @@ function simStep() {
   // 2. DM主控联动
   stepDmMaster(dt);
 
-  // 3. 中子注入计算
-  var totalN = 0;
+  // 3. RBMK → DM 中子注入（简化版：RBMK功率达20000MW时提供中子）
+  var totalRBMKForDM = 0;
   for (var ui = 0; ui < 4; ui++) {
     var r = RBMK_UNITS[ui].REACTOR;
-    var rodsOutRatio = 0, rc = 0;
-    for (var k = 0; k < RBMK_UNITS[ui].RODS.length; k++) {
-      if (RBMK_UNITS[ui].RODS[k].group !== 'AZ') {
-        rodsOutRatio += (1 - RBMK_UNITS[ui].RODS[k].position/100); rc++;
-      }
-    }
-    if (rc > 0) rodsOutRatio /= rc;
-    var laserStrength = 0;
-    if (!RBMK_UNITS[ui].scrammed && !DM.shutdown) {
-      laserStrength = r.thermalPower * DM.CONV * (0.4 + rodsOutRatio * 0.8);
-    }
-    DM.neutronByUnit[ui] = laserStrength;
-    totalN += laserStrength;
+    // 每台RBMK功率≥20000MW时提供+100°C/min的DM升温
+    var contribution = !RBMK_UNITS[ui].scrammed && !DM.shutdown ? (r.thermalPower / 20000) * 100 : 0;
+    DM.neutronByUnit[ui] = Math.min(100, contribution);
+    totalRBMKForDM += contribution;
   }
-  totalN = Math.max(0, Math.min(20, totalN));
-  for (var ui2 = 0; ui2 < 4; ui2++) DM.neutronByUnit[ui2] = Math.max(0, Math.min(5, DM.neutronByUnit[ui2]));
-  DM.totalNeutronInput = totalN;
+  DM.totalNeutronInput = Math.min(400, totalRBMKForDM);
 
-  // 4. DM核心物理
-  var eta = 0;
-  if (DM.totalNeutronInput >= DM.NEUTRON_THRESHOLD && !DM.shutdown) {
-    var parts = DM.neutronByUnit;
-    var meanN = totalN / 4;
-    var imbalance = 0;
-    for (var k = 0; k < 4; k++) imbalance += Math.abs(parts[k] - meanN);
-    imbalance = Math.min(1, imbalance / Math.max(0.1, totalN));
-    var balanceBonus = 1 - imbalance * 0.4;
-    var nOver = DM.totalNeutronInput - DM.NEUTRON_THRESHOLD;
-    var raw = Math.pow(nOver * 1.3, 1.18);
-    eta = raw * balanceBonus;
-  }
-  DM.annihilationEta = Math.min(100, eta * 25);
-  var targetDmPower = Math.max(0, eta * 800);
-  var DM_HEAT_CAP = 30000;
+  // 4. DM核心物理（简化：升温直接由RBMK功率决定）
+  var DM_HEAT_CAP = 50000;
   var dmFlow = 0;
   for (var pi = 0; pi < DM.DMC.length; pi++) dmFlow += DM.DMC[pi].speed;
   var dmFlowRatio = Math.min(1.5, dmFlow / (DM.DMC.length * 100));
   var dTforCool = Math.max(0, DM.coreTemp - 40);
-  var removable = (dmFlowRatio * 26000) * dTforCool / 300;
-  removable = Math.min(removable, targetDmPower + 800);
-  var netHeat = targetDmPower - removable;
-  DM.thermalPower += (targetDmPower - DM.thermalPower) * Math.min(1, dt/6);
-  DM.coreTemp += (netHeat / DM_HEAT_CAP) * dt;
-  DM.coreTemp += (400/60) * dt; // 每分钟升温400°C
+  DM._removable = (dmFlowRatio * 600000) * dTforCool / 300;
+  // 净升温 = RBMK贡献的升温 - 泵冷却
+  var heatingRate = DM.totalNeutronInput; // °C/min
+  DM._netHeat = heatingRate * DM_HEAT_CAP / 60 - DM._removable; // 转换为功率单位
+  DM.thermalPower = Math.max(0, DM.totalNeutronInput * 50); // DM功率与升温速率成正比
+  DM.annihilationEta = Math.min(100, DM.totalNeutronInput / 4); // 湮灭效率与中子输入成正比
+  DM.coreTemp += (heatingRate / 60) * dt - (DM._removable / DM_HEAT_CAP) * dt;
   DM.coreTemp = Math.max(20, DM.coreTemp);
+  // 融毁状态：温度不受控暴涨500°C/min
+  if (DM._meltdownActive) DM.coreTemp += (500 / 60) * dt;
   var targetRho = Math.min(1.5, DM.totalNeutronInput * 0.22);
   DM.plasmaDensity += (targetRho - DM.plasmaDensity) * Math.min(1, dt/3.5);
 
@@ -1256,14 +1425,16 @@ function simStep() {
   if (DM.shutdown) SOUND.stop('machine_loop');
   DM._aboveTh = DM.totalNeutronInput >= DM.NEUTRON_THRESHOLD;
 
-  // 5. DM二回路
-  var removed2 = removable || 0;
-  var sgTargetPress = Math.min(17, 0.2 + removed2/800);
+  // 5. DM二回路 — 蒸汽压力由核心温度直接决定 + 泵冷却贡献
+  var removed2 = DM._removable || 0;
+  var tempBasedPress = Math.max(0, (DM.coreTemp - 40) / 30) * 2; // 40°C→0MPa, 100°C→4MPa, 190°C→10MPa
+  var pumpBasedPress = removed2 / 800;
+  var sgTargetPress = Math.min(17, tempBasedPress + pumpBasedPress);
   DM.sg_pressure += (sgTargetPress - DM.sg_pressure) * Math.min(1, dt/8);
   DM.sg_temp = 220 + DM.sg_pressure * 21;
   DM.mainSteam.pressure += (DM.sg_pressure - DM.mainSteam.pressure) * Math.min(1, dt/4);
   DM.mainSteam.temp += (DM.sg_temp - DM.mainSteam.temp) * Math.min(1, dt/6);
-  if (DM.TURBINE.govValveOpen > 0) DM.mainSteam.pressure *= (1 - DM.TURBINE.govValveOpen/100 * 0.02);
+  if (DM.TURBINE.govValveOpen > 0) DM.mainSteam.pressure *= (1 - DM.TURBINE.govValveOpen/100 * 0.004);
   DM.mainSteam.pressure = Math.max(0.05, DM.mainSteam.pressure);
 
   // 6. DM泵动态
@@ -1281,18 +1452,18 @@ function simStep() {
 
   // 7. DM汽轮机
   if (DM.TURBINE.tripValveOpen) {
-    var steamAvail = Math.max(0, Math.min(1, (DM.mainSteam.pressure - 1.0) / 5.0));
+    var steamAvail = Math.max(0, Math.min(1, (DM.mainSteam.pressure - 0.5) / 6.0));
     var gov = DM.TURBINE.govValveOpen / 100;
     var steamIn = steamAvail * gov;
-    var loadTorque = DM.TURBINE.generatorOnline ? (DM.TURBINE.genLoadSet/100) : 0.03;
+    var loadTorque = DM.TURBINE.generatorOnline ? (DM.TURBINE.genLoadSet/100) : 0.002;
     var accel = (steamIn * 1.04 - loadTorque) * 150;
     DM.TURBINE.rpm += accel * dt;
-    DM.TURBINE.rpm -= DM.TURBINE.rpm * 0.00004 * dt * 3000;
+    DM.TURBINE.rpm -= DM.TURBINE.rpm * 0.0002 * dt;
     if (DM.TURBINE.generatorOnline) DM.TURBINE.rpm += (3000 - DM.TURBINE.rpm) * Math.min(1, dt/0.4);
     if (DM.TURBINE.rpm > 3300 && !DM.TURBINE.tripped) dmTurbineTrip('超速 ' + sf(DM.TURBINE.rpm,0) + 'rpm');
     if (!DM.TURBINE.generatorOnline && DM.TURBINE.targetRpm > 0) {
       var rpmErr = DM.TURBINE.targetRpm - DM.TURBINE.rpm;
-      var newGov = 3 + Math.max(0, rpmErr/3000)*35 + (Math.abs(rpmErr)>60?7:0);
+      var newGov = 10 + Math.max(0, rpmErr/3000)*35 + (Math.abs(rpmErr)>60?7:0);
       DM.TURBINE.govValveOpen += (Math.min(42, newGov) - DM.TURBINE.govValveOpen) * Math.min(1, dt/2.5);
     }
     if (DM.TURBINE.generatorOnline) {
@@ -1317,6 +1488,7 @@ function simStep() {
     DM._meltdownActive = true;
     DM.meltdownPlaying = true;
     document.body.classList.add('meltdown');
+    startMeltdownFire();
     SOUND.stop('machine_loop');
     // 设置音乐结束事件
     if (SOUND._cache['meltdown']) {
@@ -1330,6 +1502,7 @@ function simStep() {
           SOUND.play('collision');
           DM.thermalPower = 99999; DM.coreTemp = 9999;
           document.body.classList.remove('meltdown');
+          stopMeltdownFire();
           triggerExplosionFlash();
         }
       };
@@ -1344,12 +1517,14 @@ function simStep() {
     DM.meltdownPlaying = false;
     DM._globalScramUsed = false;
     document.body.classList.remove('meltdown');
+    stopMeltdownFire();
     var gBtn = document.getElementById('globalScramBtn');
     if (gBtn) { gBtn.disabled = false; gBtn.style.opacity = '1'; gBtn.textContent = '全局紧急停堆'; }
   }
 
   // 9. UI渲染
   renderUI();
+  updateDmPumpSpeeds();
   requestAnimationFrame(simStep);
 }
 
@@ -1403,7 +1578,12 @@ function stepRBMK(ui, dt) {
   R.rho_void = alphaVoid * R.voidFraction;
   R.rho = R.rho_rods + R.rho_fuel + R.rho_void + R.rho_xe + R.rho_coolant;
 
-  if (R.thermalPower < 0.05 && R.rho < -0.002) {
+  if (u.scrammed) {
+    // 停堆后：按衰变热衰减，绕过反应性反馈（避免空泡正反馈导致功率反弹）
+    var decayHeat = 0.06 * 3200 * Math.exp(-u.scramTimer/300);
+    R.thermalPower += (decayHeat - R.thermalPower) * Math.min(1, dt/2);
+    R.thermalPower = Math.max(1e-7, Math.min(R.thermalPower, decayHeat + 5));
+  } else if (R.thermalPower < 0.05 && R.rho < -0.002) {
     R.thermalPower += (0.0001 - R.thermalPower) * Math.min(1, dt/10);
   } else {
     var gamma = 60;
@@ -1413,9 +1593,6 @@ function stepRBMK(ui, dt) {
     factor = Math.max(0.70, Math.min(1.3, factor));
     R.thermalPower *= factor;
     R.thermalPower = Math.max(1e-7, R.thermalPower);
-    if (u.scrammed && u.scramTimer < 3600 && R.thermalPower < 100) {
-      R.thermalPower = Math.max(R.thermalPower, 0.06 * 3200 * Math.exp(-u.scramTimer/300));
-    }
     if (R.peakFuelTemp > 2200) R.thermalPower *= Math.max(0.5, 1 - dt*0.2);
   }
   R.neutronFlux = R.thermalPower * 0.05;
@@ -1578,8 +1755,8 @@ function renderUI() {
   setTxt('dmN', sf(DM.totalNeutronInput,2));
   setTxt('dmEta', sf(DM.annihilationEta,1));
   setTxt('dmT', sf(DM.coreTemp,0));
-  setTxt('dmRho', sf(DM.plasmaDensity,2));
-  setTxt('dmGen', sf(DM.TURBINE.genPower,0));
+  setTxt('dmCool', sf(DM._removable,0));
+  setTxt('dmNet', sf(DM._netHeat,0));
 
   var dmState = document.getElementById('dmState');
   if (dmState) {
@@ -1616,29 +1793,19 @@ function renderUI() {
       el.classList.toggle('running', DM.TURBINE.rpm > 1000);
     }
   });
-  // DM泵速度实时更新
-  updateDmPumpSpeeds();
 }
 
 function updateDmPumpSpeeds() {
-  // Update DM pump speed text without rebuilding HTML
-  var dmList = document.getElementById('dmPumpList');
-  if (dmList) {
-    var rows = dmList.children;
-    for (var i = 0; i < rows.length && i < DM.DMC.length; i++) {
-      var p = DM.DMC[i];
-      var speedSpan = rows[i].querySelector('.speed');
-      if (speedSpan) speedSpan.textContent = sf(p.speed,0) + '%';
-    }
+  // Update DM pump speed text using IDs
+  for (var i = 0; i < DM.DMC.length; i++) {
+    var p = DM.DMC[i];
+    var el = document.getElementById('dmc' + i + 'speed');
+    if (el) el.textContent = sf(p.speed,0) + '%';
   }
-  var fwList = document.getElementById('dmFwpList');
-  if (fwList) {
-    var rows2 = fwList.children;
-    for (var j = 0; j < rows2.length && j < DM.DFW.length; j++) {
-      var p2 = DM.DFW[j];
-      var speedSpan2 = rows2[j].querySelector('.speed');
-      if (speedSpan2) speedSpan2.textContent = sf(p2.speed,0) + '%';
-    }
+  for (var j = 0; j < DM.DFW.length; j++) {
+    var p2 = DM.DFW[j];
+    var el2 = document.getElementById('dfw' + j + 'speed');
+    if (el2) el2.textContent = sf(p2.speed,0) + '%';
   }
 }
 
@@ -1647,15 +1814,13 @@ function setTxt(id, v) {
 }
 function sf(v, d) { return (v != null && isFinite(v)) ? v.toFixed(d) : '0'; }
 
-// === 启动 ===
-window.addEventListener('load', function() {
-  SIM.running = true; SIM.speed = 1;
-  initAllUI();
-  lastTick = performance.now();
-  requestAnimationFrame(simStep);
-  logMsg('DM', '⚛ 暗物质反应堆模拟器已就绪');
-  logMsg('INFO', '操作提示: 提控制棒 → 功率上升 → DM核心点火 → 冲转并网');
-});
+// === 启动（直接启动，不依赖load事件） ===
+SIM.running = true; SIM.speed = 1;
+try { initAllUI(); } catch(e) { console.error('initAllUI:', e); }
+lastTick = performance.now();
+requestAnimationFrame(simStep);
+logMsg('DM', '⚛ 暗物质反应堆模拟器已就绪');
+logMsg('INFO', '操作提示: 提控制棒 → 功率上升 → DM核心点火 → 冲转并网');
 </script>
 </body>
 </html>
