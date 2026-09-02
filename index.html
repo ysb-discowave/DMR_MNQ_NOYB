@@ -1,0 +1,2375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>暗物质反应堆模拟器 · RBMK-1000 × 4</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-primary: #0a0b0f;
+  --bg-secondary: #111318;
+  --bg-card: #16181f;
+  --bg-card-hover: #1c1f28;
+  --border: #242730;
+  --border-active: #3d4270;
+  --text-primary: #e8eaf0;
+  --text-secondary: #888b9a;
+  --text-muted: #55586a;
+  --accent-purple: #7c5cfc;
+  --accent-blue: #4a8cff;
+  --accent-cyan: #36d6e7;
+  --accent-green: #34d399;
+  --accent-amber: #f59e0b;
+  --accent-red: #ef4444;
+  --accent-pink: #ec4899;
+  --glow-purple: rgba(124, 92, 252, 0.25);
+  --glow-blue: rgba(74, 140, 255, 0.2);
+  --glow-green: rgba(52, 211, 153, 0.2);
+  --glow-amber: rgba(245, 158, 11, 0.2);
+  --glow-red: rgba(239, 68, 68, 0.3);
+  --radius: 8px;
+  --radius-sm: 4px;
+  --radius-lg: 12px;
+  --shadow: 0 1px 3px rgba(0,0,0,0.3);
+  --shadow-lg: 0 4px 16px rgba(0,0,0,0.4);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* === Header === */
+.header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky; top: 0; z-index: 100;
+}
+.header-left { display: flex; align-items: center; gap: 14px; }
+.header-logo {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue));
+  border-radius: 8px;
+  display: grid; place-items: center;
+  font-weight: 800; font-size: 13px; color: #fff;
+  box-shadow: 0 0 12px var(--glow-purple);
+}
+.header-title { font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
+.header-title span { color: var(--text-secondary); font-weight: 400; }
+.header-right { display: flex; align-items: center; gap: 10px; }
+.header-stat {
+  padding: 5px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  display: flex; align-items: center; gap: 6px;
+}
+.header-stat .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+}
+.dot-green { background: var(--accent-green); box-shadow: 0 0 6px var(--glow-green); }
+.dot-amber { background: var(--accent-amber); box-shadow: 0 0 6px var(--glow-amber); }
+.dot-red { background: var(--accent-red); box-shadow: 0 0 6px var(--glow-red); }
+.dot-purple { background: var(--accent-purple); box-shadow: 0 0 6px var(--glow-purple); }
+.header-power {
+  padding: 6px 14px;
+  background: linear-gradient(135deg, rgba(124,92,252,0.15), rgba(74,140,255,0.1));
+  border: 1px solid var(--border-active);
+  border-radius: var(--radius);
+  font-weight: 600;
+  font-size: 14px;
+}
+.header-power .label { font-size: 10px; color: var(--text-secondary); font-weight: 400; }
+
+/* === Layout === */
+.wrap { max-width: 1920px; margin: 0 auto; padding: 12px; }
+
+/* === Control Bar === */
+.control-bar {
+  display: flex; gap: 8px; padding: 10px 0;
+  flex-wrap: wrap;
+}
+.btn {
+  padding: 7px 14px; border: 1px solid var(--border);
+  background: var(--bg-card); color: var(--text-primary);
+  border-radius: var(--radius-sm); font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: all 0.15s;
+  font-family: inherit;
+}
+.btn:hover { background: var(--bg-card-hover); border-color: var(--text-muted); }
+.btn-primary { border-color: var(--accent-blue); color: var(--accent-blue); }
+.btn-primary:hover { background: rgba(74,140,255,0.1); }
+.btn-danger { border-color: var(--accent-red); color: var(--accent-red); }
+.btn-danger:hover { background: rgba(239,68,68,0.1); }
+.btn-success { border-color: var(--accent-green); color: var(--accent-green); }
+.btn-success:hover { background: rgba(52,211,153,0.1); }
+
+/* === Grid === */
+.grid-main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.grid-4 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 1200px) {
+  .grid-main { grid-template-columns: 1fr; }
+  .grid-4 { grid-template-columns: 1fr; }
+}
+
+/* === Card === */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+  box-shadow: var(--shadow);
+}
+.card-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 6px; padding-bottom: 5px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px; font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.card-body { font-size: 12px; }
+
+/* === DM Core Card === */
+.dm-core-card { grid-column: span 2; }
+@media (max-width: 1200px) { .dm-core-card { grid-column: span 1; } }
+
+/* === Stats Grid === */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.stat {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px 5px;
+}
+.stat .label { font-size: 9px; color: var(--text-secondary); letter-spacing: 0.2px; }
+.stat .value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px; font-weight: 700;
+  margin-top: 1px;
+}
+.stat .value.green { color: var(--accent-green); }
+.stat .value.blue { color: var(--accent-blue); }
+.stat .value.cyan { color: var(--accent-cyan); }
+.stat .value.amber { color: var(--accent-amber); }
+.stat .value.red { color: var(--accent-red); }
+.stat .value.purple { color: var(--accent-purple); }
+.stat .value.pink { color: var(--accent-pink); }
+
+/* === Status Badge === */
+.badge {
+  font-size: 10px; padding: 2px 7px; border-radius: 3px;
+  font-weight: 600; letter-spacing: 0.3px;
+}
+.badge-shutdown { background: rgba(85,88,106,0.2); color: var(--text-muted); border: 1px solid var(--text-muted); }
+.badge-critical { background: rgba(74,140,255,0.15); color: var(--accent-blue); border: 1px solid rgba(74,140,255,0.3); }
+.badge-power { background: rgba(52,211,153,0.15); color: var(--accent-green); border: 1px solid rgba(52,211,153,0.3); }
+.badge-scram { background: rgba(239,68,68,0.2); color: var(--accent-red); border: 1px solid var(--accent-red); animation: blinkBadge 0.5s infinite; }
+.badge-melt { background: rgba(239,68,68,0.3); color: #fff; border: 1px solid var(--accent-red); }
+.badge-ignited { background: rgba(124,92,252,0.2); color: var(--accent-purple); border: 1px solid rgba(124,92,252,0.4); }
+.badge-standby { background: rgba(54,214,231,0.1); color: var(--accent-cyan); border: 1px solid rgba(54,214,231,0.2); }
+@keyframes blinkBadge { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* === Rod Grid === */
+.rod-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 1px;
+  margin: 4px 0;
+}
+.rod-cell {
+  aspect-ratio: 1;
+  border-radius: 1px;
+  cursor: pointer;
+  transition: all 0.1s;
+  font-size: 5px;
+  display: grid; place-items: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  position: relative;
+  min-width: 0;
+  user-select: none;
+}
+.rod-cell.selected {
+  outline: 2px solid #fff;
+  outline-offset: -1px;
+  z-index: 2;
+}
+.rod-cell.jammed {
+  outline: 2px solid var(--accent-red) !important;
+  animation: jamFlash 0.7s infinite;
+}
+@keyframes jamFlash { 0%,100% { box-shadow: 0 0 4px var(--accent-red); } 50% { box-shadow: 0 0 10px var(--accent-red); } }
+
+/* === Lever === */
+.lever-row {
+  display: flex; align-items: center; gap: 5px;
+  margin: 3px 0;
+}
+.lever-row .label { font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
+.lever-row .value { font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 600; min-width: 36px; text-align: right; }
+input[type=range].lever {
+  -webkit-appearance: none; appearance: none;
+  flex: 1; height: 6px;
+  background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple), var(--accent-red));
+  border-radius: 3px; outline: none; border: none;
+}
+input[type=range].lever::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--bg-card); border: 2px solid var(--text-primary);
+  cursor: pointer; box-shadow: 0 0 6px rgba(0,0,0,0.4);
+}
+input[type=range].lever::-moz-range-thumb {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--bg-card); border: 2px solid var(--text-primary);
+  cursor: pointer;
+}
+
+/* === Pump Row === */
+.pump-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 6px; margin-bottom: 3px;
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+.pump-row .name { flex: 1; color: var(--text-secondary); }
+.pump-row .speed { font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 600; min-width: 36px; text-align: right; }
+.pump-row .speed.running { color: var(--accent-green); }
+.pump-row .speed.tripped { color: var(--accent-red); }
+.pump-btn { font-size: 10px; padding: 2px 6px; border-radius: 2px; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text-secondary); font-family: inherit; }
+.pump-btn.on { border-color: var(--accent-green); color: var(--accent-green); }
+.pump-btn.on:hover { background: rgba(52,211,153,0.1); }
+.pump-btn.off { border-color: var(--accent-red); color: var(--accent-red); }
+.pump-btn.off:hover { background: rgba(239,68,68,0.1); }
+
+/* === DM Core Visualization === */
+.dm-core-vis {
+  position: relative;
+  height: 150px;
+  background: radial-gradient(ellipse at center, rgba(124,92,252,0.05) 0%, transparent 70%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin: 4px 0;
+  overflow: hidden;
+}
+.dm-ball {
+  position: absolute;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: 90px; height: 90px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, rgba(124,92,252,0.4), rgba(74,140,255,0.2) 50%, transparent 70%);
+  border: 2px solid rgba(124,92,252,0.3);
+  transition: all 0.3s;
+  display: grid; place-items: center;
+  z-index: 2;
+}
+.dm-ball.active {
+  box-shadow: 0 0 30px var(--glow-purple), 0 0 60px var(--glow-blue);
+  border-color: var(--accent-purple);
+}
+.dm-ball .inner {
+  width: 60%; height: 60%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,0.8), var(--accent-purple) 40%, transparent 70%);
+  transition: all 0.3s;
+}
+.dm-ball .label {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  font-size: 9px; font-weight: 700; text-align: center;
+  color: #fff; text-shadow: 0 0 8px rgba(0,0,0,0.8);
+  pointer-events: none;
+}
+.dm-ball .label small { display: block; font-size: 7px; color: rgba(255,255,255,0.6); }
+/* DM port indicators */
+.dm-port {
+  position: absolute; z-index: 1;
+  padding: 2px 6px; border-radius: var(--radius-sm);
+  background: var(--bg-card); border: 1px solid var(--border);
+  text-align: center; font-size: 9px;
+}
+.dm-port .pn { color: var(--text-secondary); }
+.dm-port .pv { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 11px; }
+.dm-port.u1 { left: 5%; top: 20%; }
+.dm-port.u1 .pv { color: var(--accent-blue); }
+.dm-port.u2 { right: 5%; top: 20%; }
+.dm-port.u2 .pv { color: var(--accent-green); }
+.dm-port.u3 { left: 5%; bottom: 20%; }
+.dm-port.u3 .pv { color: var(--accent-amber); }
+.dm-port.u4 { right: 5%; bottom: 20%; }
+.dm-port.u4 .pv { color: var(--accent-pink); }
+
+/* === Turbine === */
+.turbine-vis {
+  display: flex; align-items: center; gap: 3px;
+  padding: 4px 0; justify-content: center;
+}
+.turb-stage {
+  width: 26px; height: 26px;
+  border: 2px solid var(--border); border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 8px; font-weight: 600; color: var(--text-muted);
+  transition: all 0.3s;
+}
+.turb-stage.running {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 10px var(--glow-blue);
+  color: var(--accent-cyan);
+}
+.turb-shaft {
+  width: 8px; height: 2px;
+  background: var(--border); border-radius: 1px;
+}
+
+/* === Alarm === */
+.alarm-log {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-height: 120px; overflow-y: auto;
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.alarm-log .alarm-entry {
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: 60px 50px 1fr;
+  gap: 6px;
+}
+.alarm-log .alarm-entry .time { color: var(--text-muted); }
+.alarm-log .alarm-entry .lvl { font-weight: 600; }
+.alarm-log .alarm-entry .lvl.INFO { color: var(--accent-cyan); }
+.alarm-log .alarm-entry .lvl.WARN { color: var(--accent-amber); }
+.alarm-log .alarm-entry .lvl.ALRM { color: var(--accent-red); }
+.alarm-log .alarm-entry .lvl.SCRM { color: #fff; background: var(--accent-red); padding: 0 3px; border-radius: 2px; }
+.alarm-log .alarm-entry .lvl.DM { color: var(--accent-purple); }
+
+/* === Select / Input === */
+.ctrl-row {
+  display: flex; align-items: center; gap: 4px;
+  margin: 3px 0; flex-wrap: wrap;
+}
+.ctrl-row label { font-size: 10px; color: var(--text-secondary); }
+.ctrl-row select, .ctrl-row input {
+  background: var(--bg-secondary); color: var(--text-primary);
+  border: 1px solid var(--border); padding: 2px 5px;
+  border-radius: var(--radius-sm); font-size: 11px;
+  font-family: inherit;
+}
+.ctrl-row select:focus, .ctrl-row input:focus { outline: none; border-color: var(--accent-purple); }
+.ctrl-row input[type=number] { width: 60px; }
+
+/* === Group buttons === */
+.group-btns { display: flex; gap: 3px; flex-wrap: wrap; }
+.group-btns .btn { padding: 3px 6px; font-size: 10px; }
+
+/* === Meltdown overlay === */
+body.meltdown {
+  animation: meltScreen 0.5s infinite, meltdownShake 0.12s infinite;
+}
+@keyframes meltScreen {
+  0%,100% { box-shadow: inset 0 0 200px rgba(124,0,255,0.6); }
+  50% { box-shadow: inset 0 0 300px rgba(255,0,0,0.8); }
+}
+body.meltdown::after {
+  content: '☢ 反应堆融毁 ☢';
+  position: fixed; top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  font-size: 60px; font-weight: 900;
+  color: rgba(255,0,0,0.2);
+  pointer-events: none; z-index: 9999;
+  font-family: 'Inter', sans-serif;
+  animation: meltText 1s infinite;
+}
+@keyframes meltText {
+  0%,100% { opacity: 0.3; transform: translate(-50%,-50%) scale(1); }
+  50% { opacity: 0.8; transform: translate(-50%,-50%) scale(1.05); }
+}
+
+/* === Meltdown fire canvas overlay === */
+#fire-overlay {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none; z-index: 9998;
+}
+
+/* === Meltdown overlay for explosion === */
+#explosion-overlay {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: white; z-index: 999999;
+  opacity: 0; transition: opacity 0.05s;
+  pointer-events: none;
+}
+#blackhole-canvas {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none; z-index: 999998;
+  display: none;
+}
+@keyframes meltdownShake {
+  0%, 100% { transform: translate(0,0); }
+  10% { transform: translate(-8px, 6px); }
+  20% { transform: translate(6px, -8px); }
+  30% { transform: translate(-6px, 4px); }
+  40% { transform: translate(8px, -6px); }
+  50% { transform: translate(-4px, 8px); }
+  60% { transform: translate(6px, -4px); }
+  70% { transform: translate(-8px, 6px); }
+  80% { transform: translate(4px, -8px); }
+  90% { transform: translate(-6px, 4px); }
+}
+@keyframes meltdownGlow {
+  0%, 100% { box-shadow: 0 0 30px 10px rgba(255,50,0,0.8), inset 0 0 40px rgba(255,100,0,0.6); }
+  50% { box-shadow: 0 0 60px 25px rgba(255,80,0,0.9), inset 0 0 80px rgba(255,150,0,0.8); }
+}
+body.meltdown #dmPanel {
+  animation: meltdownGlow 0.5s infinite;
+  border-color: #ff3300;
+}
+body.meltdown .card {
+  transition: border-color 0.3s;
+}
+body.meltdown .card:not(#dmCard) {
+  border-color: rgba(255,60,0,0.4);
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <div class="header-logo">DM</div>
+    <div class="header-title">暗物质反应堆 <span>· RBMK-1000 × 4</span></div>
+  </div>
+  <div class="header-right">
+    <div class="header-stat">
+      <span class="dot dot-purple"></span>
+      <span id="rbmkStatus">RBMK 0/4</span>
+    </div>
+    <div class="header-stat">
+      <span class="dot" id="dmStatusDot"></span>
+      <span id="dmStatusText">离线</span>
+    </div>
+    <div class="header-power">
+      <span class="label">总功率</span>
+      <span id="totalPower">0</span> <span style="font-size:11px;color:var(--text-secondary);">MWt</span>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- Control Bar -->
+  <div class="control-bar">
+    <button class="btn btn-danger" id="globalScramBtn" onclick="checkAndGlobalScram()">全局紧急停堆</button>
+    <span style="flex:1"></span>
+  </div>
+
+  <!-- Main Grid -->
+  <div class="grid-main">
+    <!-- Left: 4 RBMK Units (2x2) -->
+    <div class="grid-4" id="rbmkGrid">
+      <!-- RBMK Unit 0 -->
+      <div class="card" id="unit-0" data-unit="0">
+        <div class="card-header">
+          <span>RBMK-1 <span class="badge badge-shutdown" id="u0state">SHUTDOWN</span></span>
+          <span style="color:var(--accent-blue);font-size:11px;">◉</span>
+        </div>
+        <div class="stats-row">
+          <div class="stat"><div class="label">功率 MWt</div><div class="value blue" id="u0pw">0.0</div></div>
+          <div class="stat"><div class="label">中子通量 %</div><div class="value cyan" id="u0flux">0.0</div></div>
+          <div class="stat"><div class="label">反应性 ρ</div><div class="value amber" id="u0rho">0.00</div></div>
+          <div class="stat"><div class="label">温度 °C</div><div class="value" id="u0T">20</div></div>
+        </div>
+        <div class="ctrl-row">
+          <label>模式:</label>
+          <select id="u0mode" onchange="changeUnitMode(0)">
+            <option value="manual">手动</option>
+            <option value="auto">自动恒功率</option>
+          </select>
+          <input type="number" id="u0setp" value="1000" min="0" max="3200" step="50">
+          <span style="font-size:10px;color:var(--text-muted);">MW</span>
+        </div>
+        <div class="rod-grid" id="u0rodgrid"></div>
+        <div class="lever-row">
+          <span class="label">提棒</span>
+          <input type="range" class="lever" id="u0lever" min="0" max="100" step="1" value="100"
+            oninput="onUnitLever(0, this.value, true)">
+          <span class="value" id="u0leverTxt">100%</span>
+          <span class="label">插棒</span>
+        </div>
+        <div class="group-btns">
+          <button class="btn" onclick="groupAllRods(0,0)">全提0%</button>
+          <button class="btn" onclick="groupAllRods(0,50)">50%</button>
+          <button class="btn" onclick="groupAllRods(0,100)">全插100%</button>
+          </div>
+      </div>
+
+      <!-- RBMK Unit 1 -->
+      <div class="card" id="unit-1" data-unit="1">
+        <div class="card-header">
+          <span>RBMK-2 <span class="badge badge-shutdown" id="u1state">SHUTDOWN</span></span>
+          <span style="color:var(--accent-green);font-size:11px;">◉</span>
+        </div>
+        <div class="stats-row">
+          <div class="stat"><div class="label">功率 MWt</div><div class="value green" id="u1pw">0.0</div></div>
+          <div class="stat"><div class="label">中子通量 %</div><div class="value cyan" id="u1flux">0.0</div></div>
+          <div class="stat"><div class="label">反应性 ρ</div><div class="value amber" id="u1rho">0.00</div></div>
+          <div class="stat"><div class="label">温度 °C</div><div class="value" id="u1T">20</div></div>
+        </div>
+        <div class="ctrl-row">
+          <label>模式:</label>
+          <select id="u1mode" onchange="changeUnitMode(1)">
+            <option value="manual">手动</option>
+            <option value="auto">自动恒功率</option>
+          </select>
+          <input type="number" id="u1setp" value="1000" min="0" max="3200" step="50">
+          <span style="font-size:10px;color:var(--text-muted);">MW</span>
+        </div>
+        <div class="rod-grid" id="u1rodgrid"></div>
+        <div class="lever-row">
+          <span class="label">提棒</span>
+          <input type="range" class="lever" id="u1lever" min="0" max="100" step="1" value="100"
+            oninput="onUnitLever(1, this.value, true)">
+          <span class="value" id="u1leverTxt">100%</span>
+          <span class="label">插棒</span>
+        </div>
+        <div class="group-btns">
+          <button class="btn" onclick="groupAllRods(1,0)">全提0%</button>
+          <button class="btn" onclick="groupAllRods(1,50)">50%</button>
+          <button class="btn" onclick="groupAllRods(1,100)">全插100%</button>
+          </div>
+      </div>
+
+      <!-- RBMK Unit 2 -->
+      <div class="card" id="unit-2" data-unit="2">
+        <div class="card-header">
+          <span>RBMK-3 <span class="badge badge-shutdown" id="u2state">SHUTDOWN</span></span>
+          <span style="color:var(--accent-amber);font-size:11px;">◉</span>
+        </div>
+        <div class="stats-row">
+          <div class="stat"><div class="label">功率 MWt</div><div class="value amber" id="u2pw">0.0</div></div>
+          <div class="stat"><div class="label">中子通量 %</div><div class="value cyan" id="u2flux">0.0</div></div>
+          <div class="stat"><div class="label">反应性 ρ</div><div class="value amber" id="u2rho">0.00</div></div>
+          <div class="stat"><div class="label">温度 °C</div><div class="value" id="u2T">20</div></div>
+        </div>
+        <div class="ctrl-row">
+          <label>模式:</label>
+          <select id="u2mode" onchange="changeUnitMode(2)">
+            <option value="manual">手动</option>
+            <option value="auto">自动恒功率</option>
+          </select>
+          <input type="number" id="u2setp" value="1000" min="0" max="3200" step="50">
+          <span style="font-size:10px;color:var(--text-muted);">MW</span>
+        </div>
+        <div class="rod-grid" id="u2rodgrid"></div>
+        <div class="lever-row">
+          <span class="label">提棒</span>
+          <input type="range" class="lever" id="u2lever" min="0" max="100" step="1" value="100"
+            oninput="onUnitLever(2, this.value, true)">
+          <span class="value" id="u2leverTxt">100%</span>
+          <span class="label">插棒</span>
+        </div>
+        <div class="group-btns">
+          <button class="btn" onclick="groupAllRods(2,0)">全提0%</button>
+          <button class="btn" onclick="groupAllRods(2,50)">50%</button>
+          <button class="btn" onclick="groupAllRods(2,100)">全插100%</button>
+          </div>
+      </div>
+
+      <!-- RBMK Unit 3 -->
+      <div class="card" id="unit-3" data-unit="3">
+        <div class="card-header">
+          <span>RBMK-4 <span class="badge badge-shutdown" id="u3state">SHUTDOWN</span></span>
+          <span style="color:var(--accent-pink);font-size:11px;">◉</span>
+        </div>
+        <div class="stats-row">
+          <div class="stat"><div class="label">功率 MWt</div><div class="value pink" id="u3pw">0.0</div></div>
+          <div class="stat"><div class="label">中子通量 %</div><div class="value cyan" id="u3flux">0.0</div></div>
+          <div class="stat"><div class="label">反应性 ρ</div><div class="value amber" id="u3rho">0.00</div></div>
+          <div class="stat"><div class="label">温度 °C</div><div class="value" id="u3T">20</div></div>
+        </div>
+        <div class="ctrl-row">
+          <label>模式:</label>
+          <select id="u3mode" onchange="changeUnitMode(3)">
+            <option value="manual">手动</option>
+            <option value="auto">自动恒功率</option>
+          </select>
+          <input type="number" id="u3setp" value="1000" min="0" max="3200" step="50">
+          <span style="font-size:10px;color:var(--text-muted);">MW</span>
+        </div>
+        <div class="rod-grid" id="u3rodgrid"></div>
+        <div class="lever-row">
+          <span class="label">提棒</span>
+          <input type="range" class="lever" id="u3lever" min="0" max="100" step="1" value="100"
+            oninput="onUnitLever(3, this.value, true)">
+          <span class="value" id="u3leverTxt">100%</span>
+          <span class="label">插棒</span>
+        </div>
+        <div class="group-btns">
+          <button class="btn" onclick="groupAllRods(3,0)">全提0%</button>
+          <button class="btn" onclick="groupAllRods(3,50)">50%</button>
+          <button class="btn" onclick="groupAllRods(3,100)">全插100%</button>
+          </div>
+    </div>
+
+    <!-- Right: DM Core Control Panel -->
+    <div class="card dm-core-card" id="dmPanel">
+      <div class="card-header">
+        <span>暗物质湮灭核心 <span class="badge badge-standby" id="dmState">STANDBY</span></span>
+        <span style="font-size:11px;color:var(--text-muted);">中子注入式等离子体约束</span>
+      </div>
+
+      <!-- DM Core Visualization -->
+      <div class="dm-core-vis">
+        <div class="dm-ball" id="dmBall">
+          <div class="inner" id="dmInner"></div>
+          <div class="label">
+            DM<br>
+            <small id="dmDensity">ρ 0.00</small>
+          </div>
+        </div>
+        <div class="dm-port u1"><div class="pn">RBMK-1</div><div class="pv" id="u0port">0 MW</div></div>
+        <div class="dm-port u2"><div class="pn">RBMK-2</div><div class="pv" id="u1port">0 MW</div></div>
+        <div class="dm-port u3"><div class="pn">RBMK-3</div><div class="pv" id="u2port">0 MW</div></div>
+        <div class="dm-port u4"><div class="pn">RBMK-4</div><div class="pv" id="u3port">0 MW</div></div>
+      </div>
+
+      <!-- DM Stats -->
+      <div class="stats-row">
+        <div class="stat"><div class="label">DM功率 MWt</div><div class="value purple" id="dmPw">0.0</div></div>
+        <div class="stat"><div class="label">中子注入 Σn</div><div class="value cyan" id="dmN">0.00</div></div>
+        <div class="stat"><div class="label">湮灭效率 %</div><div class="value green" id="dmEta">0</div></div>
+        <div class="stat"><div class="label">核心温度 °C</div><div class="value" id="dmT">20</div></div>
+        <div class="stat"><div class="label">冷却 MW</div><div class="value blue" id="dmCool">0</div></div>
+        <div class="stat"><div class="label">净热 MW</div><div class="value" id="dmNet">0</div></div>
+      </div>
+
+      <!-- DM Controls -->
+      <div class="ctrl-row">
+        <label>主控模式:</label>
+        <select id="dmMasterMode" onchange="changeDmMasterMode()">
+          <option value="independent">独立手动</option>
+          <option value="equal">均流联动</option>
+          <option value="dm_pid">DM自动调配</option>
+        </select>
+        <label>目标:</label>
+        <input type="number" id="dmTargetPw" value="8000" min="0" max="16000" step="200">
+        <span style="font-size:10px;color:var(--text-muted);">MWt</span>
+      </div>
+
+      <!-- Fuel Cells -->
+      <div style="border:1px solid var(--border);border-radius:var(--radius);padding:6px;margin:4px 0;">
+        <div class="card-header" style="margin-bottom:3px;padding-bottom:3px;">
+          <span>燃料电池组</span>
+        </div>
+        <div id="fuelCellList" style="display:flex;gap:4px;margin-top:4px;">
+          <div class="pump-row" style="flex:1;display:flex;align-items:center;gap:4px;">
+            <span class="name" style="min-width:50px;">FC-1</span>
+            <button class="pump-btn" id="fuelBtn0" onclick="toggleFuelCell(0)" style="background:rgba(107,114,128,0.5);cursor:not-allowed;">■</button>
+            <span class="speed" id="fuelStatus0" style="font-size:10px;color:var(--text-muted);">锁定(禁用)</span>
+          </div>
+          <div class="pump-row" style="flex:1;display:flex;align-items:center;gap:4px;">
+            <span class="name" style="min-width:50px;">FC-2</span>
+            <button class="pump-btn" id="fuelBtn1" onclick="toggleFuelCell(1)" style="background:rgba(107,114,128,0.5);cursor:not-allowed;">■</button>
+            <span class="speed" id="fuelStatus1" style="font-size:10px;color:var(--text-muted);">锁定(禁用)</span>
+          </div>
+          <div class="pump-row" style="flex:1;display:flex;align-items:center;gap:4px;">
+            <span class="name" style="min-width:50px;">FC-3</span>
+            <button class="pump-btn" id="fuelBtn2" onclick="toggleFuelCell(2)" style="background:rgba(107,114,128,0.5);cursor:not-allowed;">■</button>
+            <span class="speed" id="fuelStatus2" style="font-size:10px;color:var(--text-muted);">锁定(禁用)</span>
+          </div>
+        </div>
+        <div style="font-size:9px;color:var(--text-secondary);margin-top:3px;">⚠ P2融毁或停机时才可操作</div>
+      </div>
+
+      <!-- DM Pumps -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:4px 0;">
+        <div>
+          <div style="font-size:9px;color:var(--text-secondary);margin-bottom:2px;">暗物质冷却泵 DMC ×6</div>
+          <div id="dmPumpList">
+            <div class="pump-row"><span class="name">DMC-1</span><button class="pump-btn off" onclick="toggleDmPump('DMC',0)">■</button><span class="speed" id="dmc0speed">0%</span></div>
+            <div class="pump-row"><span class="name">DMC-2</span><button class="pump-btn off" onclick="toggleDmPump('DMC',1)">■</button><span class="speed" id="dmc1speed">0%</span></div>
+            <div class="pump-row"><span class="name">DMC-3</span><button class="pump-btn off" onclick="toggleDmPump('DMC',2)">■</button><span class="speed" id="dmc2speed">0%</span></div>
+            <div class="pump-row"><span class="name">DMC-4</span><button class="pump-btn off" onclick="toggleDmPump('DMC',3)">■</button><span class="speed" id="dmc3speed">0%</span></div>
+            <div class="pump-row"><span class="name">DMC-5</span><button class="pump-btn off" onclick="toggleDmPump('DMC',4)">■</button><span class="speed" id="dmc4speed">0%</span></div>
+            <div class="pump-row"><span class="name">DMC-6</span><button class="pump-btn off" onclick="toggleDmPump('DMC',5)">■</button><span class="speed" id="dmc5speed">0%</span></div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--text-secondary);margin-bottom:2px;">给水泵 DFW ×3</div>
+          <div id="dmFwpList">
+            <div class="pump-row"><span class="name">DFW-1</span><button class="pump-btn off" onclick="toggleDmPump('DFW',0)">■</button><span class="speed" id="dfw0speed">0%</span></div>
+            <div class="pump-row"><span class="name">DFW-2</span><button class="pump-btn off" onclick="toggleDmPump('DFW',1)">■</button><span class="speed" id="dfw1speed">0%</span></div>
+            <div class="pump-row"><span class="name">DFW-3</span><button class="pump-btn off" onclick="toggleDmPump('DFW',2)">■</button><span class="speed" id="dfw2speed">0%</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Turbine -->
+      <div style="border:1px solid var(--border);border-radius:var(--radius);padding:6px;margin:4px 0;">
+        <div class="card-header" style="margin-bottom:3px;padding-bottom:3px;">
+          <span>汽轮机 · K-DM4000</span>
+          <span class="badge badge-shutdown" id="dmGenStatus">SHUTDOWN</span>
+        </div>
+        <div class="turbine-vis">
+          <div class="turb-stage" id="dmHp">HP</div>
+          <div class="turb-shaft"></div>
+          <div class="turb-stage" id="dmIp">IP</div>
+          <div class="turb-shaft"></div>
+          <div class="turb-stage" id="dmLp1">LP1</div>
+          <div class="turb-shaft"></div>
+          <div class="turb-stage" id="dmLp2">LP2</div>
+          <div class="turb-shaft"></div>
+          <div class="turb-stage" id="dmGenIcon">G</div>
+        </div>
+        <div class="stats-row">
+          <div class="stat"><div class="label">转速 RPM</div><div class="value cyan" id="dmRpm">0</div></div>
+          <div class="stat"><div class="label">负荷 %</div><div class="value" id="dmLoad">0</div></div>
+          <div class="stat"><div class="label">主蒸汽 MPa</div><div class="value blue" id="dmMsP">0.0</div></div>
+          <div class="stat"><div class="label">主蒸汽 °C</div><div class="value amber" id="dmMsT">20</div></div>
+        </div>
+        <div class="lever-row">
+          <span class="label">负荷</span>
+          <input type="range" class="lever" id="dmLoadSlider" min="0" max="110" value="0" oninput="setDmLoad(this.value)">
+          <span class="value" id="dmLoadSetTxt">0%</span>
+        </div>
+        <div class="group-btns">
+          <button class="btn btn-primary" onclick="dmTurbineRollUp()">冲转</button>
+          <button class="btn btn-success" onclick="dmTurbineSync()">并网</button>
+          <button class="btn" onclick="dmRaiseLoad()">加负荷</button>
+          <button class="btn" onclick="dmLowerLoad()">减负荷</button>
+          <button class="btn btn-danger" onclick="dmTurbineTrip('手动脱扣')">脱扣</button>
+          <button class="btn btn-success" onclick="dmTurbineReset()">脱扣复位</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alarm Log -->
+  <div class="card" style="margin-top:0;">
+    <div class="card-header">
+      <span>事件日志</span>
+      <span style="color:var(--text-muted);font-size:11px;cursor:pointer;" onclick="document.getElementById('alarmLog').innerHTML=''">清屏</span>
+    </div>
+    <div class="alarm-log" id="alarmLog"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   暗物质反应堆模拟器 · 核心引擎
+   4 × RBMK-1000 + 暗物质湮灭核心 + 汽轮机
+   ============================================================ */
+
+// === 全局仿真 ===
+var SIM = { time: 0, speed: 1, running: true };
+var lastTick = performance.now();
+
+// === 音效系统 ===
+var SOUND = {
+  enabled: true,
+  _cache: {},
+  load: function(name, src) {
+    if (!src || !SOUND.enabled) return;
+    if (SOUND._cache[name]) return;
+    try { var a = new Audio(src); a.preload = 'auto'; a.volume = 0.6; SOUND._cache[name] = a; } catch(e) {}
+  },
+  play: function(name) {
+    if (!SOUND.enabled || !SOUND._cache[name]) return;
+    var a = SOUND._cache[name]; a.currentTime = 0; a.volume = 0.6;
+    try { a.play().catch(function(){}); } catch(e) {}
+  },
+  stop: function(name) {
+    if (SOUND._cache[name]) { SOUND._cache[name].pause(); SOUND._cache[name].currentTime = 0; }
+  }
+};
+SOUND.load('scram_alert', 'sounds/scram_alert.ogg');
+SOUND.load('alarm', 'sounds/alarm.wav');
+SOUND.load('shutdown', 'sounds/shutdown.mp3');
+SOUND.load('explosion', 'sounds/explosion.ogg');
+SOUND.load('collision', 'sounds/collision.ogg');
+SOUND.load('machine_loop', 'sounds/machine_loop.ogg');
+SOUND.load('power_off', 'sounds/power_off.ogg');
+SOUND.load('resonance', 'sounds/resonance.ogg');
+SOUND.load('startup_sfx', 'sounds/startup.mp3');
+SOUND.load('intro', 'sounds/intro.ogg');
+SOUND.load('elevator', 'sounds/电梯.mp3');
+// === 分P融毁音乐 ===
+SOUND.load('P1融毁', 'sounds/P1融毁.ogg');
+SOUND.load('p1代码检测', 'sounds/p1代码检测.ogg');
+SOUND.load('P1成功音乐', 'sounds/P1成功音乐.ogg');
+SOUND.load('P2融毁', 'sounds/P2融毁.ogg');
+
+// === 燃料电池控制 ===
+function toggleFuelCell(idx) {
+  // 只在P2融毁或停机时允许操作
+  if (DM._scramPhase !== 'p2_melting' && DM._scramPhase !== 'shutdown_window') {
+    return;
+  }
+
+  var fc = DM.fuelCells[idx];
+  fc.locked = !fc.locked;
+  fc.popped = !fc.locked;
+
+  // 更新按钮状态
+  var btn = document.getElementById('fuelBtn' + idx);
+  var status = document.getElementById('fuelStatus' + idx);
+  if (fc.locked) {
+    btn.className = 'pump-btn';
+    btn.style.background = 'rgba(34,197,94,0.8)';
+    status.textContent = '锁定';
+    status.style.color = '#22c55e';
+  } else {
+    btn.className = 'pump-btn off';
+    btn.style.background = 'rgba(234,179,8,0.8)';
+    status.textContent = '弹出';
+    status.style.color = '#eab308';
+  }
+
+  // 如果在P2停机窗口内，检查是否全部弹出
+  if (DM._p2ShutdownActive) {
+    // 如果还未开始倒计时，点击任意一个按钮后开始3秒倒计时
+    if (!DM._p2CountdownStarted) {
+      DM._p2CountdownStarted = true;
+      DM._p2CountdownRemaining = 3.0;
+      startP2Countdown();
+    }
+    // 只有在倒计时结束后才检查是否全部弹出
+    if (!DM._p2CountdownStarted || DM._p2CountdownRemaining > 0) return;
+    checkP2ShutdownSuccess();
+  }
+}
+
+function startP2Countdown() {
+  var timerEl = document.getElementById('p2ShutdownTimer');
+  
+  DM._p2CountdownInterval = setInterval(function() {
+    DM._p2CountdownRemaining -= 0.1;
+    if (timerEl) {
+      if (DM._p2CountdownRemaining > 0) {
+        timerEl.textContent = DM._p2CountdownRemaining.toFixed(1) + 's';
+      } else {
+        timerEl.textContent = '0.0s';
+      }
+    }
+
+    if (DM._p2CountdownRemaining <= 0) {
+      clearInterval(DM._p2CountdownInterval);
+      // 3秒倒计时结束，检查是否全部弹出
+      checkP2ShutdownSuccess();
+    }
+  }, 100);
+}
+
+function updateFuelCellStatus() {
+  var allLocked = DM.fuelCells.every(function(fc) { return fc.locked; });
+  var lockedCount = DM.fuelCells.filter(function(fc) { return fc.locked; }).length;
+  var statusEl = document.getElementById('fuelCellsStatus');
+  if (statusEl) {
+    if (allLocked) {
+      statusEl.textContent = '全部锁定';
+      statusEl.className = 'badge badge-power';
+    } else if (lockedCount > 0) {
+      statusEl.textContent = lockedCount + '/3 锁定';
+      statusEl.className = 'badge badge-warning';
+    } else {
+      statusEl.textContent = '全部弹出';
+      statusEl.className = 'badge badge-shutdown';
+    }
+  }
+}
+
+// === P2停机窗口 ===
+function triggerP2ShutdownWindow() {
+  if (DM._p2ShutdownActive) return;
+  DM._p2ShutdownActive = true;
+  DM._scramPhase = 'shutdown_window';
+  DM._p2CountdownStarted = false;
+  DM._p2CountdownRemaining = 0;
+
+  // 启用燃料电池按钮
+  for (var i = 0; i < 3; i++) {
+    var btn = document.getElementById('fuelBtn' + i);
+    var status = document.getElementById('fuelStatus' + i);
+    if (btn) {
+      btn.style.background = '';
+      btn.style.cursor = 'pointer';
+    }
+    if (DM.fuelCells[i].locked) {
+      status.textContent = '锁定';
+      status.style.color = '#22c55e';
+    } else {
+      status.textContent = '弹出';
+      status.style.color = '';
+    }
+  }
+
+  // 弹出警示弹窗
+  var warning = document.createElement('div');
+  warning.id = 'p2-shutdown-warning';
+  warning.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(220,38,38,0.95);color:white;padding:30px 50px;border-radius:12px;z-index:10000;text-align:center;font-size:18px;font-weight:bold;box-shadow:0 0 40px rgba(220,38,38,0.8);animation:pulse 0.5s infinite alternate;';
+  warning.innerHTML = '<div style="font-size:28px;margin-bottom:10px;">⚠ 紧急停机窗口 ⚠</div><div style="font-size:14px;margin-bottom:15px;">弹出3个燃料电池！点击任意一个后开始3秒计时</div><div style="font-size:20px;" id="p2ShutdownTimer">等待中...</div>';
+  document.body.appendChild(warning);
+
+  // 添加脉冲动画
+  if (!document.getElementById('p2ShutdownStyle')) {
+    var style = document.createElement('style');
+    style.id = 'p2ShutdownStyle';
+    style.textContent = '@keyframes pulse { from { transform: translate(-50%,-50%) scale(1); } to { transform: translate(-50%,-50%) scale(1.05); } }';
+    document.head.appendChild(style);
+  }
+}
+
+function checkP2ShutdownSuccess() {
+  if (!DM._p2ShutdownActive) return;
+
+  // 只有在倒计时结束后才检查
+  if (DM._p2CountdownStarted && DM._p2CountdownRemaining > 0) return;
+
+  // 检查是否所有燃料电池都已弹出
+  var allPopped = DM.fuelCells.every(function(fc) { return !fc.locked; });
+  if (allPopped) {
+    // 成功
+    if (DM._p2CountdownInterval) clearInterval(DM._p2CountdownInterval);
+    DM._p2ShutdownActive = false;
+    DM._p2CountdownStarted = false;
+    var warning = document.getElementById('p2-shutdown-warning');
+    if (warning) {
+      warning.innerHTML = '<div style="font-size:28px;margin-bottom:10px;">✅ P2停机成功！</div><div style="font-size:14px;">反应堆正在安全停堆...</div>';
+      warning.style.background = 'rgba(34,197,94,0.95)';
+      setTimeout(function() {
+        if (warning && warning.parentNode) warning.parentNode.removeChild(warning);
+      }, 2000);
+    }
+    handleP2ShutdownSuccess();
+    // 禁用燃料电池按钮
+    for (var i = 0; i < 3; i++) {
+      var btn = document.getElementById('fuelBtn' + i);
+      var status = document.getElementById('fuelStatus' + i);
+      if (btn) {
+        btn.style.background = 'rgba(107,114,128,0.5)';
+        btn.style.cursor = 'not-allowed';
+      }
+      if (status) {
+        status.textContent = '锁定(禁用)';
+        status.style.color = 'var(--text-muted)';
+      }
+    }
+  } else {
+    // 失败 - 3秒后未全部弹出，等待P2音乐播完后爆炸
+    if (DM._p2CountdownInterval) clearInterval(DM._p2CountdownInterval);
+    DM._p2ShutdownActive = false;
+    DM._p2CountdownStarted = false;
+    DM._p2ShutdownFailed = true; // 标记P2停机失败
+    var warning = document.getElementById('p2-shutdown-warning');
+    if (warning) {
+      warning.innerHTML = '<div style="font-size:28px;margin-bottom:10px;">❌ P2停机失败！</div><div style="font-size:14px;">未能在规定时间内弹出所有燃料电池！</div>';
+      warning.style.background = 'rgba(220,38,38,0.95)';
+    }
+    logMsg('ALRM', '❌ P2停机窗口关闭！未能在规定时间内弹出燃料电池！等待P2音乐播放完毕...');
+
+    // 禁用燃料电池按钮
+    for (var i = 0; i < 3; i++) {
+      var btn = document.getElementById('fuelBtn' + i);
+      var status = document.getElementById('fuelStatus' + i);
+      if (btn) {
+        btn.style.background = 'rgba(107,114,128,0.5)';
+        btn.style.cursor = 'not-allowed';
+      }
+      if (status) {
+        status.textContent = '锁定(禁用)';
+        status.style.color = 'var(--text-muted)';
+      }
+    }
+  }
+}
+
+function handleP2ShutdownSuccess() {
+  logMsg('SCRM', '✅ P2紧急停机成功！反应堆安全停堆！');
+  SOUND.stop('P2融毁');
+  SOUND.stop('p1代码检测');
+  
+  // 如果P1成功音乐正在播放,则不要重复播放
+  var p1Music = SOUND._cache['P1成功音乐'];
+  if (p1Music && !p1Music.paused) {
+    logMsg('INFO', 'P1成功音乐已在播放中，跳过重复播放');
+  } else {
+    SOUND.play('P1成功音乐');
+  }
+
+  // 停止融毁效果
+  DM._meltdownActive = false;
+  DM._meltdownStopped = true;
+  DM.meltdownPlaying = false;
+  document.body.classList.remove('meltdown');
+  stopMeltdownFire();
+
+  // 停止所有反应堆功率
+  for (var ui = 0; ui < 4; ui++) {
+    var u = RBMK_UNITS[ui];
+    u.scrammed = true;
+    u.scramTimer = 0;
+    for (var i = 0; i < u.RODS.length; i++) {
+      if (!u.RODS[i].jammed) { u.RODS[i].targetPos = 100; u.RODS[i].moving = true; }
+    }
+  }
+
+  // 标记汽轮机需要复位
+  DM.TURBINE.resetNeeded = true;
+  logMsg('INFO', '⚠ 汽轮机已脱扣，请点击"脱扣复位"按钮重新启动');
+
+  // 播放成功后刷新页面
+  if (SOUND._cache['P1成功音乐']) {
+    SOUND._cache['P1成功音乐'].onended = function() {
+      logMsg('INFO', '✅ 停机完成！可以手动复位汽轮机后重新启动');
+    };
+  }
+}
+
+// === 融毁着火特效（Canvas粒子火焰） ===
+var _fire = { particles: [], canvas: null, ctx: null, running: false, frameId: null };
+function _initFireCanvas() {
+  if (_fire.canvas) return;
+  _fire.canvas = document.createElement('canvas');
+  _fire.canvas.id = 'fire-overlay';
+  document.body.appendChild(_fire.canvas);
+  _fire.ctx = _fire.canvas.getContext('2d');
+  _fire.canvas.width = window.innerWidth;
+  _fire.canvas.height = window.innerHeight;
+}
+function _fireParticle() {
+  var w = window.innerWidth, h = window.innerHeight;
+  return {
+    x: Math.random() * w, y: h - 20 - Math.random() * h * 0.15,
+    vx: (Math.random() - 0.5) * 1.5, vy: -(1.5 + Math.random() * 3),
+    size: 4 + Math.random() * 12, life: 1,
+    decay: 0.003 + Math.random() * 0.012,
+    hue: 15 + Math.random() * 30, sat: 100, lit: 35 + Math.random() * 35,
+  };
+}
+function _updateFire() {
+  if (!_fire.running || !_fire.ctx) return;
+  var w = window.innerWidth, h = window.innerHeight;
+  _fire.ctx.clearRect(0, 0, w, h);
+  for (var i = _fire.particles.length - 1; i >= 0; i--) {
+    var p = _fire.particles[i];
+    p.x += p.vx + (Math.random() - 0.5) * 0.5;
+    p.y += p.vy; p.vy -= 0.015;
+    p.life -= p.decay; p.size *= 0.997;
+    if (p.life <= 0 || p.y < -30) { _fire.particles[i] = _fireParticle(); continue; }
+    _fire.ctx.beginPath();
+    var g = _fire.ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size);
+    g.addColorStop(0, 'hsla(' + p.hue + ',' + p.sat + '%,' + Math.min(98, p.lit + 25) + '%,' + p.life + ')');
+    g.addColorStop(0.4, 'hsla(' + (p.hue - 8) + ',' + p.sat + '%,' + p.lit + '%,' + p.life * 0.7 + ')');
+    g.addColorStop(1, 'hsla(' + (p.hue - 20) + ',' + p.sat + '%,' + (p.lit - 25) + '%,0)');
+    _fire.ctx.fillStyle = g;
+    _fire.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    _fire.ctx.fill();
+  }
+  // 烟雾粒子
+  if (Math.random() < 0.3) {
+    _fire.particles.push({
+      x: Math.random() * w, y: h - 10,
+      vx: (Math.random() - 0.5) * 0.8, vy: -(0.3 + Math.random() * 0.5),
+      size: 15 + Math.random() * 25, life: 1,
+      decay: 0.002 + Math.random() * 0.005,
+      hue: 0, sat: 0, lit: 25 + Math.random() * 15,
+    });
+  }
+  _fire.frameId = requestAnimationFrame(_updateFire);
+}
+function startMeltdownFire() {
+  if (_fire.running) return;
+  _fire.running = true;
+  _initFireCanvas();
+  _fire.canvas.style.display = 'block';
+  _fire.particles = [];
+  for (var i = 0; i < 100; i++) _fire.particles.push(_fireParticle());
+  _updateFire();
+}
+function stopMeltdownFire() {
+  _fire.running = false;
+  if (_fire.frameId) { cancelAnimationFrame(_fire.frameId); _fire.frameId = null; }
+  _fire.particles = [];
+  if (_fire.canvas) { _fire.ctx && _fire.ctx.clearRect(0, 0, _fire.canvas.width, _fire.canvas.height); _fire.canvas.style.display = 'none'; }
+}
+
+// === 爆炸特效（含黑洞） ===
+var explosionOverlay = null;
+var _bh = { canvas: null, ctx: null, frameId: null, time: 0, running: false };
+function _initBlackHoleCanvas() {
+  if (_bh.canvas) return;
+  _bh.canvas = document.createElement('canvas');
+  _bh.canvas.id = 'blackhole-canvas';
+  document.body.appendChild(_bh.canvas);
+  _bh.ctx = _bh.canvas.getContext('2d');
+  _bh.canvas.width = window.innerWidth;
+  _bh.canvas.height = window.innerHeight;
+}
+function _drawBlackHole(t) {
+  var w = _bh.canvas.width, h = _bh.canvas.height;
+  var cx = w / 2, cy = h / 2;
+  var maxR = Math.sqrt(cx * cx + cy * cy);
+  var ctx = _bh.ctx;
+  ctx.clearRect(0, 0, w, h);
+  // 黑洞半径随时间增长
+  var bhRadius = 20 + t * 80;
+  var eventHorizonR = Math.min(maxR * 0.35, bhRadius);
+  // 吸积盘 — 旋转螺旋
+  for (var ring = 0; ring < 6; ring++) {
+    var rBase = eventHorizonR * (1.5 + ring * 0.6);
+    var rotOff = ring * 0.8 + t * 2;
+    var alpha = Math.max(0, 0.3 - ring * 0.04);
+    ctx.beginPath();
+    for (var a = 0; a < Math.PI * 2; a += 0.05) {
+      var spiralR = rBase + Math.sin(a * 3 + rotOff) * rBase * 0.15;
+      var x = cx + Math.cos(a) * spiralR;
+      var y = cy + Math.sin(a) * spiralR;
+      if (a === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    var hue = 20 + ring * 15;
+    ctx.fillStyle = 'hsla(' + hue + ', 100%, ' + (50 - ring * 5) + '%, ' + alpha + ')';
+    ctx.fill();
+  }
+  // 引力透镜 — 扭曲环
+  for (var l = 0; l < 3; l++) {
+    var lr = eventHorizonR * (1.2 + l * 0.5);
+    ctx.beginPath();
+    ctx.arc(cx, cy, lr, 0, Math.PI * 2);
+    ctx.strokeStyle = 'hsla(240, 80%, ' + (70 - l * 15) + '%, ' + (0.15 - l * 0.04) + ')';
+    ctx.lineWidth = 2 + l * 1.5;
+    ctx.stroke();
+  }
+  // 事件视界 — 纯黑中心
+  var grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, eventHorizonR);
+  grad.addColorStop(0, '#000');
+  grad.addColorStop(0.6, '#000');
+  grad.addColorStop(0.85, '#1a0a2e');
+  grad.addColorStop(1, 'rgba(30,0,60,0.6)');
+  ctx.beginPath();
+  ctx.arc(cx, cy, eventHorizonR, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+  // 霍金辐射 — 中心微光
+  var glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, eventHorizonR * 0.3);
+  glow.addColorStop(0, 'rgba(200,180,255,0.08)');
+  glow.addColorStop(1, 'rgba(200,180,255,0)');
+  ctx.beginPath();
+  ctx.arc(cx, cy, eventHorizonR * 0.3, 0, Math.PI * 2);
+  ctx.fillStyle = glow;
+  ctx.fill();
+  // 被吸入粒子
+  for (var p = 0; p < 40; p++) {
+    var angle = (p / 40) * Math.PI * 2 + t * 0.5;
+    var dist = eventHorizonR * (1.2 + Math.sin(p * 1.7 + t * 2) * 0.3);
+    var px = cx + Math.cos(angle) * dist;
+    var py = cy + Math.sin(angle) * dist;
+    ctx.beginPath();
+    ctx.arc(px, py, 1 + Math.sin(p + t * 3) * 0.5, 0, Math.PI * 2);
+    ctx.fillStyle = 'hsla(' + (40 + p * 2) + ', 100%, 70%, ' + (0.6 - dist / maxR * 0.5) + ')';
+    ctx.fill();
+  }
+}
+function _animateBlackHole() {
+  if (!_bh.running) return;
+  _bh.time += 0.016;
+  _drawBlackHole(_bh.time);
+  _bh.frameId = requestAnimationFrame(_animateBlackHole);
+}
+function triggerExplosionFlash() {
+  // 极剧烈震动
+  document.body.style.animation = 'meltdownShake 0.04s infinite';
+  // 爆炸遮罩
+  if (!explosionOverlay) {
+    explosionOverlay = document.createElement('div');
+    explosionOverlay.id = 'explosion-overlay';
+    document.body.appendChild(explosionOverlay);
+  }
+  explosionOverlay.style.opacity = '1';
+  explosionOverlay.style.background = 'radial-gradient(circle, rgba(255,255,200,0.95), rgba(255,150,50,0.85), rgba(200,50,0,0.7))';
+  explosionOverlay.style.transition = 'opacity 0.5s';
+  // 0.5秒后：白闪消退，黑洞登场
+  setTimeout(function() {
+    explosionOverlay.style.background = '#ff4400';
+    explosionOverlay.style.opacity = '0.7';
+    // 启动黑洞Canvas
+    _initBlackHoleCanvas();
+    _bh.canvas.style.display = 'block';
+    _bh.time = 0;
+    _bh.running = true;
+    _animateBlackHole();
+  }, 500);
+  // 1.5秒后：黑洞吞噬一切，遮罩渐黑
+  setTimeout(function() {
+    explosionOverlay.style.background = '#000';
+    explosionOverlay.style.opacity = '0.6';
+  }, 1500);
+  // 2.5秒后：全黑
+  setTimeout(function() {
+    _bh.running = false;
+    if (_bh.frameId) { cancelAnimationFrame(_bh.frameId); _bh.frameId = null; }
+    if (_bh.canvas) _bh.canvas.style.display = 'none';
+    explosionOverlay.style.background = '#000';
+    explosionOverlay.style.opacity = '1';
+  }, 2500);
+  // 3秒后刷新页面
+  setTimeout(function() { location.reload(); }, 3000);
+}
+
+// === 日志 ===
+function padZ(n) { return (n < 10 ? '0' : '') + n; }
+function logMsg(level, text) {
+  var log = document.getElementById('alarmLog');
+  if (!log) return;
+  var t = new Date();
+  var hh = padZ(t.getHours()), mm = padZ(t.getMinutes()), ss = padZ(t.getSeconds());
+  var entry = document.createElement('div');
+  entry.className = 'alarm-entry';
+  entry.innerHTML = '<span class="time">' + hh + ':' + mm + ':' + ss + '</span>' +
+    '<span class="lvl ' + level + '">' + level + '</span>' +
+    '<span>' + text + '</span>';
+  log.prepend(entry);
+  while (log.children.length > 100) log.removeChild(log.lastChild);
+}
+
+// === RBMK 机组工厂 ===
+function makeRBMKUnit(id, name) {
+  var u = {};
+  u.id = id; u.name = name;
+  u.scrammed = false; u.scramTimer = 0; u.mode = 'MAN';
+  u.REACTOR = {
+    thermalPower: 0.0001, neutronFlux: 0,
+    rho: -0.05, rho_rods: -0.08, rho_fuel: 0, rho_void: 0, rho_xe: 0, rho_coolant: 0,
+    Xe135: 0, I135: 0, avgFuelTemp: 20, peakFuelTemp: 20,
+    voidFraction: 0, coreMelted: false, coreInletT: 20, coreOutletT: 20,
+  };
+  u.RODS = [];
+  for (var i = 0; i < 64; i++) {
+    var row = Math.floor(i / 8), col = i % 8;
+    var isAZ = (row === 4 || col === 4);
+    var type = isAZ ? 'AZ' : 'M';
+    u.RODS.push({
+      id: i+1, row: row, col: col, group: type,
+      position: type === 'AZ' ? 0 : 100, targetPos: type === 'AZ' ? 0 : 100,
+      moving: false, jammed: false, selected: false,
+    });
+  }
+  u.AUTO = { integral: 0, prevErr: 0, setpoint: 2000 };
+  u._pumpMode = 'auto';
+  return u;
+}
+
+var RBMK_UNITS = [
+  makeRBMKUnit(0, 'RBMK-1'),
+  makeRBMKUnit(1, 'RBMK-2'),
+  makeRBMKUnit(2, 'RBMK-3'),
+  makeRBMKUnit(3, 'RBMK-4'),
+];
+var UNIT_SELECTED = [new Set(), new Set(), new Set(), new Set()];
+var UNIT_ANCHOR = [-1, -1, -1, -1];
+
+// === DM 核心 ===
+var DM = {
+  thermalPower: 0, coreTemp: 20, plasmaDensity: 0,
+  annihilationEta: 0, totalNeutronInput: 0, neutronByUnit: [0,0,0,0],
+  shutdown: false, _aboveTh: false, _masterMode: 'independent', _dmInt: 0,
+  CONV: 1, NEUTRON_THRESHOLD: 50,
+  sg_pressure: 0, sg_temp: 20,
+  mainSteam: { pressure: 0, temp: 20 },
+  DMC: [], DFW: [],
+  TURBINE: {
+    running: false, tripped: false, rpm: 0, targetRpm: 0,
+    generatorOnline: false, genPower: 0, genLoadSet: 0,
+    govValveOpen: 0, tripValveOpen: false,
+    resetNeeded: false,
+  },
+  meltdownPlaying: false,
+  _meltdownTimer: 0,
+  _meltdownActive: false,
+  _meltdownStopped: false,
+  // === 分P融毁状态 ===
+  _scramPhase: 'idle', // idle, detecting, result
+  _scramResult: null,  // true=success, false=failure
+  _scramCooldown: false, // 防止重复按急停
+  // === 燃料电池状态 ===
+  fuelCells: [
+    { locked: false, popped: false, timer: null },
+    { locked: false, popped: false, timer: null },
+    { locked: false, popped: false, timer: null },
+  ],
+  _p2ShutdownActive: false, // P2停机窗口是否激活
+  _p2ShutdownTimer: null,   // P2停机倒计时
+  _p2CountdownStarted: false, // P2倒计时是否已开始
+  _p2CountdownRemaining: 0,   // P2倒计时剩余时间
+  _p2CountdownInterval: null, // P2倒计时interval
+  _p2ShutdownFailed: false,   // P2停机是否失败
+};
+(function initDmPumps() {
+  for (var i = 0; i < 6; i++) DM.DMC.push({ id:'DMC-'+(i+1), running:false, trip:false, speed:0, targetSpeed:0 });
+  for (var j = 0; j < 3; j++) DM.DFW.push({ id:'DFW-'+(j+1), running:false, trip:false, speed:0, targetSpeed:0 });
+})();
+
+// === UI 初始化 ===
+function initAllUI() {
+  for (var ui = 0; ui < 4; ui++) initUnitUI(ui);
+  renderDmPumps();
+  // 初始化燃料电池状态（默认锁定并禁用）
+  for (var i = 0; i < 3; i++) {
+    DM.fuelCells[i].locked = true;
+    DM.fuelCells[i].popped = false;
+    var btn = document.getElementById('fuelBtn' + i);
+    var status = document.getElementById('fuelStatus' + i);
+    if (btn) {
+      btn.className = 'pump-btn';
+      btn.style.background = 'rgba(107,114,128,0.5)';
+      btn.style.cursor = 'not-allowed';
+    }
+    if (status) {
+      status.textContent = '锁定(禁用)';
+      status.style.color = 'var(--text-muted)';
+    }
+  }
+  logMsg('INFO', '界面已初始化，泵控制已加载');
+  logMsg('INFO', '⚡ 燃料电池已默认锁定并禁用，P2融毁时才可操作');
+}
+
+function initUnitUI(ui) {
+  var unit = RBMK_UNITS[ui];
+  var grid = document.getElementById('u' + ui + 'rodgrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  for (var i = 0; i < unit.RODS.length; i++) {
+    (function(idx) {
+      var rod = unit.RODS[idx];
+      var cell = document.createElement('div');
+      cell.className = 'rod-cell';
+      cell.dataset.idx = idx;
+      cell.textContent = rod.group === 'AZ' ? 'Z' : '';
+      cell.title = '#' + (idx+1) + ' ' + rod.group;
+      cell.addEventListener('click', function(ev) { clickUnitRod(ui, idx, ev); });
+      grid.appendChild(cell);
+    })(i);
+  }
+  updateUnitLeverDisplay(ui);
+}
+
+function renderDmPumps() {
+  try {
+    // Update DMC pump buttons
+    for (var i = 0; i < DM.DMC.length; i++) {
+      var p = DM.DMC[i];
+      var on = p.running && !p.trip;
+      var btn = document.querySelector('#dmPumpList .pump-row:nth-child(' + (i+1) + ') .pump-btn');
+      if (btn) {
+        btn.className = 'pump-btn ' + (on ? 'on' : 'off');
+        btn.textContent = on ? '▶' : '■';
+      }
+      var spd = document.getElementById('dmc' + i + 'speed');
+      if (spd) spd.textContent = sf(p.speed,0) + '%';
+    }
+    // Update DFW pump buttons
+    for (var j = 0; j < DM.DFW.length; j++) {
+      var p2 = DM.DFW[j];
+      var on2 = p2.running && !p2.trip;
+      var btn2 = document.querySelector('#dmFwpList .pump-row:nth-child(' + (j+1) + ') .pump-btn');
+      if (btn2) {
+        btn2.className = 'pump-btn ' + (on2 ? 'on' : 'off');
+        btn2.textContent = on2 ? '▶' : '■';
+      }
+      var spd2 = document.getElementById('dfw' + j + 'speed');
+      if (spd2) spd2.textContent = sf(p2.speed,0) + '%';
+    }
+  } catch(e) { logMsg('ERR', 'renderDmPumps: ' + e.message); }
+}
+
+function toggleDmPump(kind, idx) {
+  var arr = kind === 'DMC' ? DM.DMC : DM.DFW;
+  var p = arr[idx]; if (!p) return;
+  if (p.running && !p.trip) {
+    p.running = false; p.targetSpeed = 0;
+  } else {
+    p.running = true; p.trip = false; p.targetSpeed = 100;
+  }
+  renderDmPumps();
+  logMsg('PUMP', p.id + ' ' + (p.running ? '▶启动' : '■停止') + ' (目标转速 ' + p.targetSpeed + '%)');
+}
+
+// === 控制棒交互 ===
+function clickUnitRod(ui, idx, ev) {
+  var u = RBMK_UNITS[ui];
+  var rod = u.RODS[idx]; if (!rod) return;
+  var sel = UNIT_SELECTED[ui];
+  if (ev.shiftKey && UNIT_ANCHOR[ui] >= 0) {
+    var a = Math.min(UNIT_ANCHOR[ui], idx), b = Math.max(UNIT_ANCHOR[ui], idx);
+    for (var i = a; i <= b; i++) sel.add(i);
+  } else if (ev.ctrlKey || ev.metaKey) {
+    if (sel.has(idx)) sel.delete(idx); else sel.add(idx);
+    UNIT_ANCHOR[ui] = idx;
+  } else {
+    sel.clear(); sel.add(idx);
+    UNIT_ANCHOR[ui] = idx;
+  }
+  var grid = document.getElementById('u' + ui + 'rodgrid');
+  if (grid) {
+    var cells = grid.children;
+    for (var k = 0; k < cells.length; k++) {
+      cells[k].classList.toggle('selected', sel.has(parseInt(cells[k].dataset.idx)));
+    }
+  }
+  updateUnitLeverDisplay(ui);
+}
+
+function updateUnitLeverDisplay(ui) {
+  var sel = UNIT_SELECTED[ui];
+  var txt = document.getElementById('u' + ui + 'leverTxt');
+  if (!txt) return;
+  if (sel.size === 0) { txt.textContent = '—'; return; }
+  var u = RBMK_UNITS[ui];
+  var sum = 0, n = 0;
+  sel.forEach(function(i) { sum += u.RODS[i].position; n++; });
+  var avg = n ? sum / n : 0;
+  txt.textContent = sf(avg,0) + '%';
+  var lv = document.getElementById('u' + ui + 'lever');
+  if (lv) lv.value = Math.round(avg);
+}
+
+function onUnitLever(ui, v, finalFlag) {
+  if (DM._meltdownActive) return;
+  var u = RBMK_UNITS[ui];
+  if (u.scrammed) return;
+  var target = parseFloat(v);
+  var sel = UNIT_SELECTED[ui];
+  var lvTxt = document.getElementById('u' + ui + 'leverTxt');
+  if (lvTxt) lvTxt.textContent = sf(target,0) + '%';
+  if (!finalFlag) return;
+  var moved = 0;
+  var applySet = (sel && sel.size > 0) ? sel : null;
+  for (var i = 0; i < u.RODS.length; i++) {
+    if (u.RODS[i].group === 'AZ') continue;
+    if (applySet && !applySet.has(i)) continue;
+    if (u.RODS[i].jammed) continue;
+    u.RODS[i].targetPos = Math.max(0, Math.min(100, target));
+    u.RODS[i].moving = true; moved++;
+  }
+  if (moved > 0) logMsg('INFO', u.name + ' 拉杆 → ' + sf(target,0) + '% (' + moved + '根)');
+}
+
+function groupAllRods(ui, pct, az5) {
+  if (DM._meltdownActive) return;
+  var u = RBMK_UNITS[ui];
+  if (az5 || pct < 0) {
+    if (!u.REACTOR.coreMelted && u.REACTOR.thermalPower <= 2560) {
+      logMsg('WARN', u.name + ' AZ-5仅限功率>80%FP或融毁时使用');
+      return;
+    }
+    if (u.REACTOR.coreMelted) {
+      var success = Math.random() < 0.5;
+      if (success) {
+        logMsg('SCRM', '☢ ' + u.name + ' AZ-5紧急停堆成功！');
+        u.REACTOR.coreMelted = false; u.scrammed = true; u.scramTimer = 0;
+        for (var i = 0; i < u.RODS.length; i++) { if (!u.RODS[i].jammed) { u.RODS[i].targetPos = 100; u.RODS[i].moving = true; } }
+        SOUND.play('scram_alert'); SOUND.stop('meltdown');
+      } else {
+        logMsg('ALRM', '❌ ' + u.name + ' AZ-5停堆失败！');
+        SOUND.play('alarm');
+      }
+      return;
+    }
+    for (var i = 0; i < u.RODS.length; i++) {
+      if (u.RODS[i].jammed) continue;
+      u.RODS[i].targetPos = 100; u.RODS[i].moving = true;
+    }
+    logMsg('SCRM', u.name + ' AZ-5紧急插入');
+    return;
+  }
+  var cnt = 0;
+  for (var j = 0; j < u.RODS.length; j++) {
+    if (u.RODS[j].group === 'AZ' || u.RODS[j].jammed) continue;
+    u.RODS[j].targetPos = Math.max(0, Math.min(100, pct));
+    u.RODS[j].moving = true; cnt++;
+  }
+  logMsg('INFO', u.name + ' 组操作 → ' + pct + '% (' + cnt + '根)');
+}
+
+// === SCRAM / 启动 ===
+function scramUnit(ui, reason) {
+  var u = RBMK_UNITS[ui];
+  if (u.scrammed) return;
+  u.scrammed = true; u.scramTimer = 0;
+  for (var i = 0; i < u.RODS.length; i++) {
+    if (!u.RODS[i].jammed) { u.RODS[i].targetPos = 100; u.RODS[i].moving = true; }
+  }
+  logMsg('SCRM', '☢ ' + u.name + ' SCRAM! 原因: ' + reason);
+  SOUND.play('scram_alert');
+}
+
+function startupUnit(ui) {
+  var u = RBMK_UNITS[ui];
+  u.scrammed = false;
+  u._pumpMode = 'auto';
+  // AZ棒缓慢抽出
+  for (var k = 0; k < u.RODS.length; k++) {
+    if (u.RODS[k].group === 'AZ') { u.RODS[k].targetPos = 0; u.RODS[k].moving = true; }
+  }
+  logMsg('INFO', '▶ ' + u.name + ' 启动序列开始 (AZ棒抽出中)');
+  SOUND.play('startup_sfx');
+}
+
+function checkAndGlobalScram() {
+  // 仅在融毁进行中且处于melting阶段时才可用
+  if (!DM._meltdownActive || DM._scramPhase !== 'melting') {
+    logMsg('INFO', '❌ 当前无法使用急停（请等待融毁阶段）');
+    return;
+  }
+  // 冷却保护
+  if (DM._scramCooldown) { logMsg('INFO', '❌ 急停按钮已锁定'); return; }
+
+  DM._scramPhase = 'detecting';
+  DM._scramCooldown = true;
+  var btn = document.getElementById('globalScramBtn');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.4'; btn.textContent = '检测中...'; }
+
+  // 停止融毁音乐，播放检测音乐
+  SOUND.stop('P1融毁');
+  logMsg('SCRM', '☢ 紧急停堆请求已接收！进入代码检测阶段...');
+  SOUND.play('p1代码检测');
+
+  // 检测音乐播放完后揭晓结果并插入所有控制棒
+  if (SOUND._cache['p1代码检测']) {
+    SOUND._cache['p1代码检测'].onended = function() {
+      // 随机判定停机结果 (60%成功, 40%失败)
+      DM._scramResult = Math.random() < 0.6;
+
+      if (DM._scramResult) {
+        // === 停机成功 ===
+        logMsg('SCRM', '✅ 停机成功！反应堆安全停堆！');
+        SOUND.stop('p1代码检测');
+        SOUND.play('P1成功音乐');
+
+        // 插入所有控制棒
+        for (var ui = 0; ui < 4; ui++) {
+          var u = RBMK_UNITS[ui];
+          for (var i = 0; i < u.RODS.length; i++) {
+            if (!u.RODS[i].jammed) { u.RODS[i].targetPos = 100; u.RODS[i].moving = true; }
+          }
+        }
+
+        // 停止融毁效果
+        DM._meltdownActive = false;
+        DM._meltdownStopped = true;
+        DM.meltdownPlaying = false;
+        document.body.classList.remove('meltdown');
+        stopMeltdownFire();
+
+        // 安全停堆：所有控制棒插入，功率下降
+        for (var ui2 = 0; ui2 < 4; ui2++) {
+          var u2 = RBMK_UNITS[ui2];
+          u2.scrammed = true; u2.scramTimer = 0;
+        }
+        DM.shutdown = true;
+        // 标记汽轮机需要复位
+        DM.TURBINE.resetNeeded = true;
+        logMsg('INFO', '⚠ 汽轮机已脱扣，请点击"脱扣复位"按钮重新启动');
+        SOUND.stop('machine_loop');
+
+        // 成功音乐播完后提示
+        if (SOUND._cache['P1成功音乐']) {
+          SOUND._cache['P1成功音乐'].onended = function() {
+            logMsg('INFO', '✅ 停机完成！可以手动复位汽轮机后重新启动');
+          };
+        }
+      } else {
+        // === 停机失败 ===
+        logMsg('ALRM', '❌ 停机失败！控制棒卡住！反应堆将熔毁！');
+        SOUND.stop('p1代码检测');
+        
+        // 等待5秒后播放P2融毁音乐
+        logMsg('ALRM', '⏱ 5秒后进入P2融毁阶段...');
+        setTimeout(function() {
+          SOUND.play('P2融毁');
+          DM._scramPhase = 'p2_waiting';
+          
+          // P2融毁音乐播完后触发P2停机窗口
+          if (SOUND._cache['P2融毁']) {
+            SOUND._cache['P2融毁'].onended = function() {
+              // 100%概率触发P2停机窗口
+              logMsg('ALRM', '⚠ P2紧急停机窗口已开启！快速弹出3个燃料电池！');
+              triggerP2ShutdownWindow();
+            };
+          }
+        }, 5000);
+      }
+    };
+  }
+}
+
+// === DM 汽轮机 ===
+function dmTurbineRollUp() {
+  if (DM.TURBINE.tripped) { logMsg('WARN', '汽轮机脱扣状态'); return; }
+  if (DM.TURBINE.rpm > 500) { logMsg('WARN', '已在冲转'); return; }
+  if (DM.mainSteam.pressure < 2.0) { logMsg('WARN', '主蒸汽压力不足 <2.0MPa'); return; }
+  DM.TURBINE.running = true; DM.TURBINE.tripValveOpen = true;
+  DM.TURBINE.govValveOpen = 10; DM.TURBINE.targetRpm = 3000;
+  logMsg('DM', '汽轮机冲转开始 目标3000rpm');
+}
+function dmTurbineSync() {
+  if (DM._meltdownActive) return;
+  if (DM.TURBINE.rpm < 2980 || DM.TURBINE.rpm > 3020) { logMsg('WARN', '转速不在同步范围 2980-3020'); return; }
+  if (DM.TURBINE.generatorOnline) return;
+  DM.TURBINE.generatorOnline = true;
+  logMsg('DM', '✓ 发电机并网');
+}
+function dmRaiseLoad() {
+  if (!DM.TURBINE.generatorOnline) return;
+  DM.TURBINE.genLoadSet = Math.min(110, DM.TURBINE.genLoadSet + 5);
+  document.getElementById('dmLoadSlider').value = DM.TURBINE.genLoadSet;
+  document.getElementById('dmLoadSetTxt').textContent = DM.TURBINE.genLoadSet + '%';
+}
+function dmLowerLoad() {
+  DM.TURBINE.genLoadSet = Math.max(0, DM.TURBINE.genLoadSet - 5);
+  document.getElementById('dmLoadSlider').value = DM.TURBINE.genLoadSet;
+  document.getElementById('dmLoadSetTxt').textContent = DM.TURBINE.genLoadSet + '%';
+}
+function setDmLoad(v) {
+  if (!DM.TURBINE.generatorOnline) { document.getElementById('dmLoadSlider').value = 0; return; }
+  DM.TURBINE.genLoadSet = parseInt(v);
+  document.getElementById('dmLoadSetTxt').textContent = v + '%';
+}
+function dmTurbineTrip(reason) {
+  DM.TURBINE.tripped = true; DM.TURBINE.running = false;
+  DM.TURBINE.tripValveOpen = false; DM.TURBINE.govValveOpen = 0;
+  DM.TURBINE.targetRpm = 0; DM.TURBINE.generatorOnline = false;
+  DM.TURBINE.genLoadSet = 0; DM.TURBINE.genPower = 0;
+  DM.TURBINE.resetNeeded = true;
+  document.getElementById('dmLoadSlider').value = 0;
+  document.getElementById('dmLoadSetTxt').textContent = '0%';
+  logMsg('ALRM', '⚠ 汽轮机脱扣！原因: ' + reason);
+  SOUND.play('alarm');
+}
+
+function dmTurbineReset() {
+  if (!DM.TURBINE.resetNeeded) {
+    logMsg('INFO', '汽轮机无需复位');
+    return;
+  }
+  DM.TURBINE.tripped = false;
+  DM.TURBINE.running = false;
+  DM.TURBINE.tripValveOpen = false;
+  DM.TURBINE.govValveOpen = 0;
+  DM.TURBINE.targetRpm = 0;
+  DM.TURBINE.generatorOnline = false;
+  DM.TURBINE.genLoadSet = 0;
+  DM.TURBINE.genPower = 0;
+  DM.TURBINE.resetNeeded = false;
+  DM.TURBINE.rpm = 0;
+  document.getElementById('dmLoadSlider').value = 0;
+  document.getElementById('dmLoadSetTxt').textContent = '0%';
+  logMsg('INFO', '✓ 汽轮机脱扣复位成功，可重新冲转');
+}
+
+// === 模式切换 ===
+function changeUnitMode(ui) {
+  if (DM._meltdownActive) return;
+  var sel = document.getElementById('u' + ui + 'mode');
+  var inp = document.getElementById('u' + ui + 'setp');
+  var v = sel ? sel.value : 'manual';
+  var m = v === 'auto' ? 'AUTO' : 'MAN';
+  RBMK_UNITS[ui].mode = m;
+  RBMK_UNITS[ui].AUTO.integral = 0;
+  if (inp && v === 'auto') {
+    var sp = parseFloat(inp.value);
+    if (!isNaN(sp)) RBMK_UNITS[ui].AUTO.setpoint = Math.max(0, Math.min(3200, sp));
+  }
+  logMsg('INFO', RBMK_UNITS[ui].name + ' 模式切换: ' + m);
+}
+function changeDmMasterMode() {
+  if (DM._meltdownActive) return;
+  var sel = document.getElementById('dmMasterMode');
+  var inp = document.getElementById('dmTargetPw');
+  var v = sel ? sel.value : 'independent';
+  DM._masterMode = v; DM._dmInt = 0;
+  if (inp && v === 'dm_pid') {
+    var tp = parseFloat(inp.value);
+    if (!isNaN(tp)) DM._targetDmSetpoint = Math.max(0, Math.min(16000, tp));
+  }
+  logMsg('DM', '主控模式: ' + v);
+}
+
+// === 仿真核心 ===
+function simStep() {
+  var now = performance.now();
+  var dtWall = Math.min(50, now - lastTick);
+  lastTick = now;
+  if (!SIM.running) { requestAnimationFrame(simStep); return; }
+  var dt = (dtWall / 1000) * SIM.speed;
+  SIM.time += dt;
+
+  // 1. RBMK物理
+  var totalRBMKPower = 0;
+  for (var ui = 0; ui < 4; ui++) {
+    stepRBMK(ui, dt);
+    totalRBMKPower += RBMK_UNITS[ui].REACTOR.thermalPower;
+  }
+
+  // 2. DM主控联动
+  stepDmMaster(dt);
+
+  // 3. RBMK → DM 中子注入（简化版：RBMK功率达20000MW时提供中子）
+  var totalRBMKForDM = 0;
+  for (var ui = 0; ui < 4; ui++) {
+    var r = RBMK_UNITS[ui].REACTOR;
+    // 每台RBMK功率≥20000MW时提供+100°C/min的DM升温
+    var contribution = !RBMK_UNITS[ui].scrammed && !DM.shutdown ? (r.thermalPower / 20000) * 100 : 0;
+    DM.neutronByUnit[ui] = Math.min(100, contribution);
+    totalRBMKForDM += contribution;
+  }
+  DM.totalNeutronInput = Math.min(400, totalRBMKForDM);
+
+  // 4. DM核心物理（简化：升温直接由RBMK功率决定）
+  var DM_HEAT_CAP = 50000;
+  // 检查燃料电池锁定状态
+  var fuelCellsLocked = DM.fuelCells.every(function(fc) { return fc.locked; });
+  var dmFlow = 0;
+  for (var pi = 0; pi < DM.DMC.length; pi++) dmFlow += DM.DMC[pi].speed;
+  var dmFlowRatio = Math.min(1.5, dmFlow / (DM.DMC.length * 100));
+  var dTforCool = Math.max(0, DM.coreTemp - 40);
+  DM._removable = (dmFlowRatio * 600000) * dTforCool / 300;
+  // 净升温 = RBMK贡献的升温 - 泵冷却
+  var heatingRate = fuelCellsLocked ? DM.totalNeutronInput : 0; // 燃料电池未全部锁定时不发热
+  DM._netHeat = heatingRate * DM_HEAT_CAP / 60 - DM._removable; // 转换为功率单位
+  DM.thermalPower = Math.max(0, fuelCellsLocked ? DM.totalNeutronInput * 50 : 0); // DM功率与升温速率成正比
+  DM.annihilationEta = Math.min(100, DM.totalNeutronInput / 4); // 湮灭效率与中子输入成正比
+  DM.coreTemp += (heatingRate / 60) * dt - (DM._removable / DM_HEAT_CAP) * dt;
+  DM.coreTemp = Math.max(20, DM.coreTemp);
+  // 融毁状态：温度不受控暴涨500°C/min
+  if (DM._meltdownActive) DM.coreTemp += (500 / 60) * dt;
+  var targetRho = Math.min(1.5, DM.totalNeutronInput * 0.22);
+  DM.plasmaDensity += (targetRho - DM.plasmaDensity) * Math.min(1, dt/3.5);
+
+  if (!DM._aboveTh && fuelCellsLocked && DM.totalNeutronInput >= DM.NEUTRON_THRESHOLD && !DM.shutdown) {
+    logMsg('DM', '✦ 暗物质核心点火成功！Σn = ' + sf(DM.totalNeutronInput,2));
+    SOUND.play('resonance');
+    SOUND.play('machine_loop');
+  }
+  // 停止机器循环音效
+  if (DM.shutdown) SOUND.stop('machine_loop');
+  DM._aboveTh = DM.totalNeutronInput >= DM.NEUTRON_THRESHOLD;
+
+  // 5. DM二回路 — 蒸汽压力由核心温度直接决定 + 泵冷却贡献
+  var removed2 = DM._removable || 0;
+  var tempBasedPress = Math.max(0, (DM.coreTemp - 40) / 30) * 2; // 40°C→0MPa, 100°C→4MPa, 190°C→10MPa
+  var pumpBasedPress = removed2 / 800;
+  var sgTargetPress = Math.min(17, tempBasedPress + pumpBasedPress);
+  DM.sg_pressure += (sgTargetPress - DM.sg_pressure) * Math.min(1, dt/8);
+  DM.sg_temp = 220 + DM.sg_pressure * 21;
+  DM.mainSteam.pressure += (DM.sg_pressure - DM.mainSteam.pressure) * Math.min(1, dt/4);
+  DM.mainSteam.temp += (DM.sg_temp - DM.mainSteam.temp) * Math.min(1, dt/6);
+  if (DM.TURBINE.govValveOpen > 0) DM.mainSteam.pressure *= (1 - DM.TURBINE.govValveOpen/100 * 0.004);
+  DM.mainSteam.pressure = Math.max(0.05, DM.mainSteam.pressure);
+
+  // 6. DM泵动态
+  for (var i = 0; i < DM.DMC.length; i++) {
+    var p = DM.DMC[i];
+    if (p.running && !p.trip) p.speed += (p.targetSpeed - p.speed) * Math.min(1, dt/3.5);
+    else p.speed += (0 - p.speed) * Math.min(1, dt/8);
+    if (p.trip && p.speed < 1) p.trip = false;
+  }
+  for (var j = 0; j < DM.DFW.length; j++) {
+    var p2 = DM.DFW[j];
+    if (p2.running && !p2.trip) p2.speed += (p2.targetSpeed - p2.speed) * Math.min(1, dt/3.5);
+    else p2.speed += (0 - p2.speed) * Math.min(1, dt/8);
+  }
+
+  // 7. DM汽轮机
+  if (DM.TURBINE.tripValveOpen) {
+    var steamAvail = Math.max(0, Math.min(1, (DM.mainSteam.pressure - 0.5) / 6.0));
+    var gov = DM.TURBINE.govValveOpen / 100;
+    var steamIn = steamAvail * gov;
+    var loadTorque = DM.TURBINE.generatorOnline ? (DM.TURBINE.genLoadSet/100) : 0.002;
+    var accel = (steamIn * 1.04 - loadTorque) * 150;
+    DM.TURBINE.rpm += accel * dt;
+    DM.TURBINE.rpm -= DM.TURBINE.rpm * 0.0002 * dt;
+    if (DM.TURBINE.generatorOnline) DM.TURBINE.rpm += (3000 - DM.TURBINE.rpm) * Math.min(1, dt/0.4);
+    if (DM.TURBINE.rpm > 3300 && !DM.TURBINE.tripped) dmTurbineTrip('超速 ' + sf(DM.TURBINE.rpm,0) + 'rpm');
+    if (!DM.TURBINE.generatorOnline && DM.TURBINE.targetRpm > 0) {
+      var rpmErr = DM.TURBINE.targetRpm - DM.TURBINE.rpm;
+      var newGov = 10 + Math.max(0, rpmErr/3000)*35 + (Math.abs(rpmErr)>60?7:0);
+      DM.TURBINE.govValveOpen += (Math.min(42, newGov) - DM.TURBINE.govValveOpen) * Math.min(1, dt/2.5);
+    }
+    if (DM.TURBINE.generatorOnline) {
+      var tg = 6 + DM.TURBINE.genLoadSet * 0.88;
+      DM.TURBINE.govValveOpen += (tg - DM.TURBINE.govValveOpen) * Math.min(1, dt/5);
+    }
+  } else {
+    DM.TURBINE.rpm += (0 - DM.TURBINE.rpm) * Math.min(1, dt/25);
+    DM.TURBINE.govValveOpen += (0 - DM.TURBINE.govValveOpen) * Math.min(1, dt/1.5);
+  }
+  DM.TURBINE.rpm = Math.max(0, DM.TURBINE.rpm);
+  if (DM.TURBINE.generatorOnline) {
+    var thr = Math.min(1, DM.thermalPower/11000, DM.TURBINE.govValveOpen/90);
+    var tgt = 4000 * (DM.TURBINE.genLoadSet/100) * thr;
+    DM.TURBINE.genPower += (tgt - DM.TURBINE.genPower) * Math.min(1, dt/8);
+  } else {
+    DM.TURBINE.genPower += (0 - DM.TURBINE.genPower) * Math.min(1, dt/4);
+  }
+
+  // 8. 保护与融毁 — 1000°C触发P1融毁音乐
+  if (!DM._meltdownStopped && !DM._meltdownActive && DM.coreTemp > 1000 && DM._scramPhase === 'idle') {
+    DM._meltdownActive = true;
+    DM.meltdownPlaying = true;
+    DM._scramPhase = 'melting'; // 融毁阶段，可以按急停
+    document.body.classList.add('meltdown');
+    startMeltdownFire();
+    SOUND.stop('machine_loop');
+    SOUND.play('P1融毁');
+    // 设置P1融毁音乐结束事件 — 播完未急停则直接爆炸
+    if (SOUND._cache['P1融毁']) {
+      SOUND._cache['P1融毁'].onended = function() {
+        if (DM._scramPhase === 'melting' && !DM._meltdownStopped) {
+          // 用户未在音乐期间按急停，等待5秒后播放P2融毁音乐
+          DM._scramPhase = 'p2_waiting';
+          logMsg('ALRM', '⚠️ 紧急停堆未响应！5秒后进入P2融毁阶段...');
+          setTimeout(function() {
+            if (DM._scramPhase === 'p2_waiting' && !DM._meltdownStopped) {
+              DM._scramPhase = 'p2_melting';
+              DM.meltdownPlaying = true;
+              logMsg('ALRM', '☢☢☢ P2融毁阶段启动！暗物质反应堆即将爆炸！');
+              SOUND.play('P2融毁');
+              // P2融毁阶段100%触发P2停机窗口
+              logMsg('ALRM', '🔧 检测到P2停机窗口！快速弹出3个燃料电池！');
+              triggerP2ShutdownWindow();
+              // P2融毁音乐播完则爆炸
+              if (SOUND._cache['P2融毁']) {
+                SOUND._cache['P2融毁'].onended = function() {
+                  if (DM._scramPhase === 'p2_melting' && !DM._meltdownStopped) {
+                    DM._meltdownActive = false;
+                    DM._meltdownStopped = true;
+                    DM._scramPhase = 'idle';
+                    DM.meltdownPlaying = false;
+                    logMsg('ALRM', '💥 暗物质反应堆爆炸！');
+                    SOUND.play('explosion');
+                    SOUND.play('collision');
+                    DM.thermalPower = 99999; DM.coreTemp = 9999;
+                    document.body.classList.remove('meltdown');
+                    stopMeltdownFire();
+                    triggerExplosionFlash();
+                  }
+                };
+              }
+            }
+          }, 5000);
+        }
+      };
+    }
+    logMsg('ALRM', '☢☢☢ 暗物质核心超温(>1000°C)！请立即按下紧急停堆！');
+  }
+  // 温度降至安全范围后清除融毁状态（仅当已通过急停停机成功时）
+  if (DM.coreTemp < 500 && DM._meltdownStopped && DM._scramPhase === 'idle') {
+    DM._meltdownStopped = false;
+    DM._meltdownActive = false;
+    DM.meltdownPlaying = false;
+    DM._scramCooldown = false;
+    document.body.classList.remove('meltdown');
+    stopMeltdownFire();
+  }
+
+  // 9. UI渲染
+  renderUI();
+  updateDmPumpSpeeds();
+  requestAnimationFrame(simStep);
+}
+
+// === RBMK 单步物理 ===
+function stepRBMK(ui, dt) {
+  var u = RBMK_UNITS[ui];
+  var R = u.REACTOR;
+  if (u.scrammed) u.scramTimer += dt;
+
+  // 控制棒运动
+  for (var i = 0; i < u.RODS.length; i++) {
+    var rod = u.RODS[i];
+    if (rod.jammed) { rod.moving = false; continue; }
+    if (!rod.moving && Math.abs(rod.position - rod.targetPos) < 0.1) continue;
+    var rate = rod.group === 'AZ' ? 45 : 10;
+    if (u.scrammed) rate = rod.group === 'AZ' ? 80 : 35;
+    var diff = rod.targetPos - rod.position;
+    var step = Math.sign(diff) * Math.min(Math.abs(diff), rate * dt);
+    rod.position += step;
+    if (Math.abs(rod.position - rod.targetPos) < 0.1) { rod.position = rod.targetPos; rod.moving = false; }
+  }
+
+  var avgIns = 0, nonAz = 0, azSum = 0, azCnt = 0;
+  for (var i = 0; i < u.RODS.length; i++) {
+    var rod = u.RODS[i];
+    if (rod.group !== 'AZ') { avgIns += rod.position; nonAz++; }
+    else { azSum += rod.position; azCnt++; }
+  }
+  avgIns = nonAz ? avgIns / nonAz : 100;
+  var azPosNorm = azCnt ? (azSum / azCnt) / 100 : 1;
+  R.rho_rods = +0.046 - (avgIns / 100) * 0.080 - azPosNorm * 0.024;
+
+  // 自动泵流量（泵与机组状态联动）
+  // 冷却计算：停堆后维持冷却流量，温度可降至室温
+  var pumpSpeed = 100; // 持续冷却，不依赖scram状态
+  var totalFlow = 16000 * (pumpSpeed / 100);
+  var flowRatio = totalFlow / 16000;
+
+  var Tref = 265;
+  var pRatio = Math.max(0, R.thermalPower / 3200);
+  R.rho_fuel = -0.00012 * (R.avgFuelTemp - Tref);
+  R.rho_coolant = 3e-5 * (R.avgFuelTemp - 200);
+  var XeProd = 2.0e-5 * pRatio;
+  var XeDecay = 2.1e-5 * R.Xe135;
+  var XeBurn = 1.5e-4 * R.Xe135 * (0.05 + pRatio*0.95);
+  R.Xe135 += (XeProd - XeDecay - XeBurn) * dt;
+  R.Xe135 = Math.max(0, Math.min(0.03, R.Xe135));
+  R.rho_xe = -R.Xe135;
+  var alphaVoid = 0.0025 + 0.01 * pRatio;
+  if (R.voidFraction > 40) alphaVoid *= 1.6;
+  R.rho_void = alphaVoid * R.voidFraction;
+  R.rho = R.rho_rods + R.rho_fuel + R.rho_void + R.rho_xe + R.rho_coolant;
+
+  if (u.scrammed) {
+    // 停堆后：按衰变热衰减，绕过反应性反馈（避免空泡正反馈导致功率反弹）
+    var decayHeat = 0.06 * 3200 * Math.exp(-u.scramTimer/300);
+    R.thermalPower += (decayHeat - R.thermalPower) * Math.min(1, dt/2);
+    R.thermalPower = Math.max(1e-7, Math.min(R.thermalPower, decayHeat + 5));
+  } else if (R.thermalPower < 0.05 && R.rho < -0.002) {
+    R.thermalPower += (0.0001 - R.thermalPower) * Math.min(1, dt/10);
+  } else {
+    var gamma = 60;
+    var rate = R.rho * gamma;
+    rate = Math.max(-0.8, Math.min(0.8, rate));
+    var factor = Math.exp(rate * dt);
+    factor = Math.max(0.70, Math.min(1.3, factor));
+    R.thermalPower *= factor;
+    R.thermalPower = Math.max(1e-7, R.thermalPower);
+    if (R.peakFuelTemp > 2200) R.thermalPower *= Math.max(0.5, 1 - dt*0.2);
+  }
+  R.neutronFlux = R.thermalPower * 0.05;
+
+  var HEAT_CAP = 25000;
+  var coldLegT = Math.max(20, 220 + 25 * pRatio);
+  var massKgS = totalFlow / 3.6;
+  var cpEff = 4.5 + R.voidFraction * 0.05;
+  var dT1 = Math.max(0, R.avgFuelTemp - coldLegT);
+  var removable = massKgS * cpEff * dT1 / 1000;
+  if (flowRatio < 0.3 && dT1 > 50) removable *= 0.4;
+  removable = Math.min(removable, R.thermalPower + 800);
+  R.avgFuelTemp += ((R.thermalPower - removable) / HEAT_CAP) * dt;
+  R.peakFuelTemp = Math.max(coldLegT+1, R.avgFuelTemp * (1.38 + 0.18 * pRatio) - coldLegT * (0.38 + 0.18 * pRatio));
+
+  var priPress = 6.4 + flowRatio * 0.65;
+  var satT = 252 + priPress * 4.75;
+  var subCool = satT - (R.avgFuelTemp + (R.avgFuelTemp - coldLegT)*0.6);
+  var voidTarget = 0;
+  if (subCool < 5) voidTarget = Math.max(0, -subCool * 2.2) + pRatio * 28 - flowRatio * 30;
+  voidTarget = Math.max(0, Math.min(98, voidTarget));
+  R.voidFraction += (voidTarget - R.voidFraction) * Math.min(1, voidTarget > R.voidFraction ? dt/1.2 : dt/4.5);
+
+  if (R.thermalPower > 2e4) R.thermalPower = 2e4;
+  if (!isFinite(R.rho)) R.rho = R.scrammed ? -0.05 : 0;
+}
+
+// === DM 主控联动 ===
+function stepDmMaster(dt) {
+  if (DM._masterMode === 'dm_pid') {
+    var target = DM._targetDmSetpoint || 6000;
+    var err = target - DM.thermalPower;
+    DM._dmInt = (DM._dmInt || 0) + err * dt * 0.00002;
+    DM._dmInt = Math.max(-0.5, Math.min(0.5, DM._dmInt));
+    var out = 0.5 + err * 0.00008 + DM._dmInt;
+    out = Math.max(0.1, Math.min(1.0, out));
+    for (var ui = 0; ui < 4; ui++) {
+      RBMK_UNITS[ui].AUTO.setpoint = 3200 * out;
+      RBMK_UNITS[ui].mode = 'AUTO';
+    }
+  } else if (DM._masterMode === 'equal') {
+    for (var uj = 0; uj < 4; uj++) {
+      RBMK_UNITS[uj].AUTO.setpoint = 3200 * 0.7;
+      RBMK_UNITS[uj].mode = 'AUTO';
+    }
+  }
+  // RBMK AUTO PID
+  for (var uk = 0; uk < 4; uk++) {
+    var uu = RBMK_UNITS[uk];
+    if (uu.mode !== 'AUTO' || uu.scrammed) continue;
+    var sp = typeof uu.AUTO.setpoint === 'number' ? uu.AUTO.setpoint : 2000;
+    var pw = Math.max(0.01, uu.REACTOR.thermalPower);
+    var err = sp - pw;
+    var relErr = err / Math.max(50, sp);
+    relErr = Math.max(-1.0, Math.min(1.0, relErr));
+    uu.AUTO.integral += relErr * dt * 2.5;
+    uu.AUTO.integral = Math.max(-1.0, Math.min(1.0, uu.AUTO.integral));
+    var out = relErr * 1.2 + uu.AUTO.integral;
+    out = Math.max(-1.8, Math.min(1.8, out));
+    var posRateOfChange = -out * 6.0;
+    var deltaPos = posRateOfChange * dt;
+    deltaPos = Math.max(-8, Math.min(8, deltaPos));
+    if (Math.abs(deltaPos) < 0.05) continue;
+    for (var ri = 0; ri < uu.RODS.length; ri++) {
+      var r = uu.RODS[ri];
+      if (r.group === 'AZ' || r.jammed) continue;
+      var nt = r.targetPos + deltaPos;
+      nt = Math.max(0, Math.min(100, nt));
+      if (Math.abs(nt - r.targetPos) >= 0.2) { r.targetPos = nt; r.moving = true; }
+    }
+  }
+}
+
+// === 渲染 UI ===
+function renderUI() {
+  // === 更新急停按钮状态文本 ===
+  var gBtn = document.getElementById('globalScramBtn');
+  if (gBtn && !gBtn.disabled) {
+    if (DM._scramPhase === 'melting') {
+      gBtn.textContent = '☢ 紧急停堆 (点击!)';
+      gBtn.style.background = 'rgba(239,68,68,0.8)';
+    } else if (DM._scramPhase === 'p2_waiting') {
+      gBtn.textContent = 'P2融毁倒计时...';
+      gBtn.style.background = 'rgba(220,38,38,0.6)';
+    } else if (DM._scramPhase === 'p2_melting') {
+      gBtn.textContent = 'P2融毁中...';
+      gBtn.style.background = 'rgba(185,28,28,0.8)';
+    } else {
+      gBtn.textContent = '全局紧急停堆';
+      gBtn.style.background = '';
+    }
+  }
+
+  var totalRBMKPwr = 0;
+  var readyCount = 0;
+  for (var ui = 0; ui < 4; ui++) {
+    var u = RBMK_UNITS[ui];
+    var R = u.REACTOR;
+    totalRBMKPwr += R.thermalPower;
+    if (!u.scrammed && R.thermalPower > 200) readyCount++;
+
+    setTxt('u'+ui+'pw', sf(R.thermalPower,1));
+    setTxt('u'+ui+'flux', sf(R.neutronFlux*20,1));
+    setTxt('u'+ui+'rho', sf(R.rho*1000,2));
+    setTxt('u'+ui+'T', sf(R.avgFuelTemp,0));
+    setTxt('u'+ui+'port', sf(R.thermalPower,0) + ' MW');
+
+    var badge = document.getElementById('u'+ui+'state');
+    if (badge) {
+      if (u.scrammed) { badge.textContent = 'SCRAM'; badge.className = 'badge badge-scram'; }
+      else if (R.thermalPower > 100) { badge.textContent = 'POWER'; badge.className = 'badge badge-power'; }
+      else if (R.thermalPower > 1) { badge.textContent = 'CRITICAL'; badge.className = 'badge badge-critical'; }
+      else { badge.textContent = 'SHUTDOWN'; badge.className = 'badge badge-shutdown'; }
+    }
+
+    var card = document.getElementById('unit-'+ui);
+    if (card) {
+      card.style.borderColor = u.scrammed ? 'var(--accent-red)' : (R.peakFuelTemp > 900 ? 'var(--accent-amber)' : 'var(--border)');
+    }
+
+    // Rod grid colors
+    var grid = document.getElementById('u' + ui + 'rodgrid');
+    if (grid) {
+      var cells = grid.children;
+      for (var ci = 0; ci < cells.length; ci++) {
+        var idx = parseInt(cells[ci].dataset.idx);
+        var rod = u.RODS[idx]; if (!rod) continue;
+        var pct = rod.position / 100;
+        var isSel = UNIT_SELECTED[ui].has(idx);
+        cells[ci].classList.toggle('selected', isSel);
+        cells[ci].classList.toggle('jammed', rod.jammed);
+        if (rod.jammed) continue;
+        if (rod.group === 'AZ') {
+          cells[ci].style.background = 'rgb(' + Math.round(40+pct*210) + ',' + Math.round(220-Math.floor(pct*180)) + ',60)';
+        } else {
+          cells[ci].style.background = 'rgb(' + Math.round(30+Math.floor((1-pct)*200)) + ',' + Math.round(100+Math.floor(pct*70)) + ',' + Math.round(210-Math.floor(pct*150)) + ')';
+        }
+        cells[ci].style.color = pct > 0.5 ? '#fff' : '#111';
+      }
+    }
+
+    // Lever text sync
+    var lvTxt = document.getElementById('u'+ui+'leverTxt');
+    if (lvTxt && UNIT_SELECTED[ui].size === 0) {
+      // show average of all non-AZ rods
+      var sum = 0, cnt = 0;
+      for (var ri = 0; ri < u.RODS.length; ri++) {
+        if (u.RODS[ri].group !== 'AZ') { sum += u.RODS[ri].position; cnt++; }
+      }
+      lvTxt.textContent = (cnt ? sf(sum/cnt,0) : '0') + '%';
+    }
+  }
+
+  setTxt('rbmkStatus', 'RBMK ' + readyCount + '/4');
+  setTxt('totalPower', sf(totalRBMKPwr + DM.thermalPower, 0));
+
+  // DM Core
+  var dmBall = document.getElementById('dmBall');
+  if (dmBall) {
+    var active = DM.totalNeutronInput >= DM.NEUTRON_THRESHOLD && !DM.shutdown;
+    dmBall.classList.toggle('active', active);
+  }
+  var dmInner = document.getElementById('dmInner');
+  if (dmInner) {
+    var scale = 1 + Math.min(2.2, DM.plasmaDensity * 1.9 + DM.annihilationEta*0.016);
+    dmInner.style.transform = 'scale(' + sf(scale,2) + ')';
+    dmInner.style.opacity = sf(0.35 + Math.min(0.9, DM.annihilationEta*0.011), 2);
+    dmInner.style.background = DM.totalNeutronInput >= DM.NEUTRON_THRESHOLD && !DM.shutdown
+      ? 'radial-gradient(circle, rgba(255,255,255,0.97) 0%, rgba(124,92,252,0.82) 32%, rgba(70,20,180,0.38) 68%, transparent 100%)'
+      : 'radial-gradient(circle, rgba(64,128,255,0.55) 0%, rgba(48,16,96,0.38) 60%, transparent 100%)';
+    dmInner.style.boxShadow = DM.totalNeutronInput >= DM.NEUTRON_THRESHOLD && !DM.shutdown
+      ? '0 0 40px 12px var(--glow-purple), inset 0 0 30px rgba(255,255,255,0.7)'
+      : '0 0 14px 3px rgba(64,128,255,0.25)';
+  }
+  setTxt('dmDensity', 'ρ ' + sf(DM.plasmaDensity,2));
+
+  setTxt('dmPw', sf(DM.thermalPower,1));
+  setTxt('dmN', sf(DM.totalNeutronInput,2));
+  setTxt('dmEta', sf(DM.annihilationEta,1));
+  setTxt('dmT', sf(DM.coreTemp,0));
+  setTxt('dmCool', sf(DM._removable,0));
+  setTxt('dmNet', sf(DM._netHeat,0));
+
+  var dmState = document.getElementById('dmState');
+  if (dmState) {
+    if (DM.shutdown) { dmState.textContent = 'SHUTDOWN'; dmState.className = 'badge badge-shutdown'; }
+    else if (DM.totalNeutronInput >= DM.NEUTRON_THRESHOLD) { dmState.textContent = '✦ IGNITED'; dmState.className = 'badge badge-ignited'; }
+    else { dmState.textContent = 'STANDBY'; dmState.className = 'badge badge-standby'; }
+  }
+
+  var dmDot = document.getElementById('dmStatusDot');
+  var dmTxt = document.getElementById('dmStatusText');
+  if (dmDot && dmTxt) {
+    if (DM.shutdown) { dmDot.className = 'dot dot-red'; dmTxt.textContent = 'DM停堆'; }
+    else if (DM.totalNeutronInput >= DM.NEUTRON_THRESHOLD) { dmDot.className = 'dot dot-purple'; dmTxt.textContent = 'DM点火'; }
+    else { dmDot.className = 'dot dot-amber'; dmTxt.textContent = 'DM待机'; }
+  }
+
+  setTxt('dmRpm', sf(DM.TURBINE.rpm,0));
+  setTxt('dmLoad', DM.TURBINE.genLoadSet);
+  setTxt('dmMsP', sf(DM.mainSteam.pressure,2));
+  setTxt('dmMsT', sf(DM.mainSteam.temp,0));
+
+  var genStatusEl = document.getElementById('dmGenStatus');
+  if (genStatusEl) {
+    if (DM.TURBINE.tripped) { genStatusEl.textContent = 'TRIPPED'; genStatusEl.className = 'badge badge-scram'; }
+    else if (DM.TURBINE.generatorOnline) { genStatusEl.textContent = 'ONLINE ' + sf(DM.TURBINE.genPower,0) + 'MWe'; genStatusEl.className = 'badge badge-power'; }
+    else if (DM.TURBINE.rpm > 1000) { genStatusEl.textContent = 'ROLLING ' + sf(DM.TURBINE.rpm,0) + 'rpm'; genStatusEl.className = 'badge badge-critical'; }
+    else { genStatusEl.textContent = 'SHUTDOWN'; genStatusEl.className = 'badge badge-shutdown'; }
+  }
+
+  var stages = ['dmHp','dmIp','dmLp1','dmLp2','dmGenIcon'];
+  stages.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.classList.toggle('running', DM.TURBINE.rpm > 1000);
+    }
+  });
+}
+
+function updateDmPumpSpeeds() {
+  // Update DM pump speed text using IDs
+  for (var i = 0; i < DM.DMC.length; i++) {
+    var p = DM.DMC[i];
+    var el = document.getElementById('dmc' + i + 'speed');
+    if (el) el.textContent = sf(p.speed,0) + '%';
+  }
+  for (var j = 0; j < DM.DFW.length; j++) {
+    var p2 = DM.DFW[j];
+    var el2 = document.getElementById('dfw' + j + 'speed');
+    if (el2) el2.textContent = sf(p2.speed,0) + '%';
+  }
+}
+
+function setTxt(id, v) {
+  var el = document.getElementById(id); if (el) el.textContent = v;
+}
+function sf(v, d) { return (v != null && isFinite(v)) ? v.toFixed(d) : '0'; }
+
+// === 启动（直接启动，不依赖load事件） ===
+SIM.running = true; SIM.speed = 1;
+// === 开场画面覆盖层 ===
+(function() {
+  var overlay = document.createElement('div');
+  overlay.id = 'intro-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:9999;display:flex;align-items:center;justify-content:center;';
+  
+  // PLAY 按钮
+  var playBtn = document.createElement('div');
+  playBtn.id = 'intro-play-btn';
+  playBtn.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10000;';
+  playBtn.innerHTML = '<button onclick="startIntro()" style="padding:16px 48px;font-size:24px;font-weight:bold;background:var(--accent-purple);color:#fff;border:none;border-radius:var(--radius-lg);cursor:pointer;box-shadow:0 0 30px var(--glow-purple);transition:all 0.3s;">▶ PLAY</button>';
+  
+  // 加载画面（只有文字，无进度条）
+  var loading = document.createElement('div');
+  loading.id = 'intro-loading';
+  loading.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:10000;display:none;text-align:center;';
+  loading.innerHTML = '<div style="font-size:24px;font-weight:bold;color:#fff;margin-bottom:10px;">加载中...</div>'
+    + '<div style="font-size:14px;color:rgba(255,255,255,0.6);">正在启动反应堆系统</div>';
+
+  // 加载指示器：右下角旋转的空心正方形（外框约1cm=38px，边框12px，中间空心14px≈3.7mm）
+  var loadSpinner = document.createElement('div');
+  loadSpinner.id = 'load-spinner';
+  loadSpinner.style.cssText = 'position:fixed;bottom:40px;right:40px;width:38px;height:38px;'
+    + 'box-sizing:border-box;border:12px solid #ffffff;background:transparent;z-index:10003;display:none;'
+    + 'animation:spin-square 3s linear infinite;';
+  var spinStyle = document.createElement('style');
+  spinStyle.textContent = '@keyframes spin-square{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}';
+  document.head.appendChild(spinStyle);
+
+  // 宣传片页面 = intro.mp4 视频 + intro.ogg 做 BGM
+  var promoScreen = document.createElement('div');
+  promoScreen.id = 'promo-screen';
+  promoScreen.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:10001;display:none;background:#000;overflow:hidden;';
+  // SKIP 按钮作为宣传片内部元素，保证浮在视频上层、能被点到
+  promoScreen.innerHTML = '<video id="promo-video" src="sounds/intro.mp4" preload="auto" playsinline '
+    + 'style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;"></video>'
+    + '<div id="promo-skip-btn" style="position:absolute;bottom:30px;right:30px;z-index:10;display:none;">'
+    + '<button onclick="skipPromo()" style="padding:10px 24px;font-size:14px;background:rgba(0,0,0,0.5);color:#fff;'
+    + 'border:1px solid rgba(255,255,255,0.5);border-radius:var(--radius);cursor:pointer;transition:all 0.3s;">SKIP</button>'
+    + '</div>';
+
+  overlay.appendChild(playBtn);
+  overlay.appendChild(loading);
+  document.body.appendChild(overlay);
+  document.body.appendChild(promoScreen);
+  document.body.appendChild(loadSpinner);
+
+  var _enteredSim = false;
+  function enterSim() {
+    if (_enteredSim) return;
+    _enteredSim = true;
+    var pv = document.getElementById('promo-video');
+    if (pv) { try { pv.pause(); } catch(e) {} }
+    loading.style.display = 'none';
+    loadSpinner.style.display = 'none';
+    promoScreen.style.display = 'none';
+    var sb = document.getElementById('promo-skip-btn');
+    if (sb) sb.style.display = 'none';
+    overlay.style.display = 'none';
+    SOUND.stop('intro');
+    SOUND.stop('elevator');
+    SIM.running = true; SIM.speed = 1;
+    lastTick = performance.now();
+    requestAnimationFrame(simStep);
+  }
+
+  // 宣传片：intro.mp4 视频 + intro.ogg 做 BGM，播完才进模拟器
+  function startPromoScreen() {
+    promoScreen.style.display = 'block';
+    promoScreen.style.opacity = '1';
+    var sb = document.getElementById('promo-skip-btn');
+    if (sb) sb.style.display = 'block';
+
+    var video = document.getElementById('promo-video');
+    var introAudio = SOUND._cache['intro'];
+    var fadedOut = false;
+
+    function fadeOut() {
+      if (fadedOut) return;
+      fadedOut = true;
+      promoScreen.style.transition = 'opacity 0.8s';
+      promoScreen.style.opacity = '0';
+      setTimeout(enterSim, 800);
+    }
+
+    // BGM：intro 音乐
+    SOUND.play('intro');
+
+    // 视频：静音循环播放，直到 intro 音乐播完（视频比音乐短也不会中断）
+    if (video) {
+      video.muted = true;
+      video.loop = true;
+      video.currentTime = 0;
+      var vp = video.play();
+      if (vp && vp.catch) vp.catch(function(){});
+    }
+
+    // 只有 intro 音乐播完才结束宣传片
+    if (introAudio) {
+      introAudio.addEventListener('ended', fadeOut, { once: true });
+      function scheduleByDuration() {
+        var d = introAudio.duration;
+        if (isFinite(d) && d > 0) setTimeout(fadeOut, d * 1000);
+        else setTimeout(fadeOut, 60000);
+      }
+      if (introAudio.readyState >= 1) scheduleByDuration();
+      else introAudio.addEventListener('loadedmetadata', scheduleByDuration, { once: true });
+    } else {
+      setTimeout(fadeOut, 60000);
+    }
+  }
+
+  window.startIntro = function() {
+    playBtn.style.display = 'none';
+    loading.style.display = 'block';
+    loadSpinner.style.display = 'block';
+
+    var elevatorAudio = SOUND._cache['elevator'];
+    SOUND.play('elevator');
+
+    var promoStarted = false;
+    function goPromo() {
+      if (promoStarted) return;
+      promoStarted = true;
+      loading.style.display = 'none';
+      loadSpinner.style.display = 'none';
+      SOUND.stop('elevator');
+      startPromoScreen();
+    }
+
+    if (elevatorAudio) {
+      elevatorAudio.addEventListener('ended', goPromo, { once: true });
+      // 兜底：电梯音 60 秒内没结束也强制进宣传片
+      setTimeout(goPromo, 60000);
+    } else {
+      setTimeout(goPromo, 3000);
+    }
+  };
+
+  // 手动跳过宣传片
+  window.skipPromo = function() {
+    enterSim();
+  };
+
+  SIM.running = false;
+})();
+
+try { initAllUI(); } catch(e) { console.error('initAllUI:', e); }
+lastTick = performance.now();
+requestAnimationFrame(simStep);
+logMsg('DM', '⚛ 暗物质反应堆模拟器已就绪');
+logMsg('INFO', '操作提示: 提控制棒 → 功率上升 → DM核心点火 → 冲转并网');
+</script>
+</body>
+</html>
